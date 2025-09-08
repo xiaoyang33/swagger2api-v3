@@ -20,20 +20,22 @@ export function pathToFunctionName(method: string, path: string): string {
   // 分割路径并过滤空字符串
   const segments = cleanPath.split('/').filter(segment => segment.length > 0);
   
-  // 将方法名添加到开头
-  const parts = [method.toLowerCase(), ...segments];
+  // 将路径段转换为驼峰命名
+  const pathParts = segments.map((part, index) => {
+    // 移除特殊字符并转换为小驼峰
+    const cleanPart = part.replace(/[^a-zA-Z0-9]/g, '');
+    if (index === 0) {
+      return cleanPart.toLowerCase();
+    }
+    return cleanPart.charAt(0).toUpperCase() + cleanPart.slice(1).toLowerCase();
+  });
   
-  // 转换为小驼峰命名
-  return parts
-    .map((part, index) => {
-      // 移除特殊字符并转换为小驼峰
-      const cleanPart = part.replace(/[^a-zA-Z0-9]/g, '');
-      if (index === 0) {
-        return cleanPart.toLowerCase();
-      }
-      return cleanPart.charAt(0).toUpperCase() + cleanPart.slice(1).toLowerCase();
-    })
-    .join('');
+  // 将HTTP方法转换为首字母大写的形式并添加到末尾
+  const methodSuffix = method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+  
+  // 组合路径名称和方法名称
+  const baseName = pathParts.join('');
+  return baseName + methodSuffix;
 }
 
 /**

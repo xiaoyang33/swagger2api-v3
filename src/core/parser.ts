@@ -88,7 +88,14 @@ export class SwaggerParser {
     }
 
     // 生成函数名
-    const functionName = operation.operationId || pathToFunctionName(method, path);
+    let functionName = operation.operationId || pathToFunctionName(method, path);
+    
+    // 如果使用了operationId，需要手动添加HTTP方法后缀
+    if (operation.operationId) {
+      // 将HTTP方法转换为首字母大写的形式并添加到末尾
+      const methodSuffix = method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+      functionName = functionName + methodSuffix;
+    }
 
     // 获取响应类型
     const responseType = getResponseType(operation.responses);

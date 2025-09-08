@@ -77,7 +77,9 @@ program
     const packageJsonPath = path.resolve(process.cwd(), 'package.json');
     if (fs.existsSync(packageJsonPath)) {
       try {
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+        const packageJson = JSON.parse(
+          fs.readFileSync(packageJsonPath, 'utf-8')
+        );
         isESModule = packageJson.type === 'module';
       } catch (error) {
         console.warn('⚠️ 无法读取package.json，使用默认CommonJS格式');
@@ -90,7 +92,7 @@ program
  */
 const config = {
   // Swagger JSON 文件路径或 URL
-  input: 'https://petstore.swagger.io/v2/swagger.json',
+  input: 'http://localhost:3000/admin/docs/json',
   
   // 输出目录
   output: './src/api',
