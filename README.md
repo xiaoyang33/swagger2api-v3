@@ -62,7 +62,7 @@ const config = {
   }
 };
 
-module.exports = config;
+export default config;
 ```
 
 ### 3. 生成接口代码
@@ -341,7 +341,7 @@ const config = {
   }
 };
 
-module.exports = config;
+export default config;
 ```
 
 ### 完整配置示例
@@ -362,7 +362,7 @@ const config = {
   }
 };
 
-module.exports = config;
+export default config;
 ```
 
 ## 技术栈

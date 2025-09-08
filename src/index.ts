@@ -92,9 +92,26 @@ export async function generateFromConfig(configPath?: string): Promise<void> {
   const fullPath = path.resolve(process.cwd(), configFile);
   
   try {
-    // 动态导入配置文件
-    const configModule = await import(fullPath);
-    const config: SwaggerConfig = configModule.default || configModule;
+    let config: SwaggerConfig;
+    
+    // 检查文件扩展名，决定使用require还是import
+    if (fullPath.endsWith('.ts') || fullPath.endsWith('.js')) {
+      // 对于TypeScript文件，先尝试require，如果失败再尝试import
+      try {
+        // 清除require缓存
+        delete require.cache[fullPath];
+        const configModule = require(fullPath);
+        config = configModule.default || configModule;
+      } catch (requireError) {
+        // 如果require失败，尝试import
+        const configModule = await import(fullPath);
+        config = configModule.default || configModule;
+      }
+    } else {
+      // 其他文件类型使用import
+      const configModule = await import(fullPath);
+      config = configModule.default || configModule;
+    }
     
     const swagger2api = new Swagger2API(config);
     

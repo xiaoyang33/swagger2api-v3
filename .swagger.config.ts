@@ -9,11 +9,8 @@ const config = {
   // 输出目录
   output: './src/api',
 
-  // 接口路径公共前缀，默认为空字符串
-  prefix: '',
-
   // request 导入路径模板
-  importTemplate: "import { request } from '../../utils/request';",
+  importTemplate: "import { request } from '@/utils/request';",
 
   // 生成器类型
   generator: 'typescript',
@@ -23,6 +20,9 @@ const config = {
 
   // 是否覆盖更新，默认为true。为true时会先删除输出目录下的所有文件
   overwrite: true,
+
+  // 接口路径公共前缀，默认为空字符串
+  prefix: '',
 
   // 代码格式化命令（可选）
   lint: 'prettier --write',
