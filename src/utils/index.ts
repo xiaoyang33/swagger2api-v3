@@ -16,10 +16,10 @@ import { SwaggerDocument, SwaggerSchema, SwaggerParameter } from '../types';
 export function pathToFunctionName(method: string, path: string): string {
   // 移除路径参数的大括号
   const cleanPath = path.replace(/\{([^}]+)\}/g, '$1');
-  
+
   // 分割路径并过滤空字符串
-  const segments = cleanPath.split('/').filter(segment => segment.length > 0);
-  
+  const segments = cleanPath.split('/').filter((segment) => segment.length > 0);
+
   // 将路径段转换为驼峰命名
   const pathParts = segments.map((part, index) => {
     // 移除特殊字符并转换为小驼峰
@@ -29,10 +29,11 @@ export function pathToFunctionName(method: string, path: string): string {
     }
     return cleanPart.charAt(0).toUpperCase() + cleanPart.slice(1).toLowerCase();
   });
-  
+
   // 将HTTP方法转换为首字母大写的形式并添加到末尾
-  const methodSuffix = method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
-  
+  const methodSuffix =
+    method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+
   // 组合路径名称和方法名称
   const baseName = pathParts.join('');
   return baseName + methodSuffix;
@@ -57,8 +58,8 @@ export function toKebabCase(str: string): string {
  */
 export function toPascalCase(str: string): string {
   return str
-    .replace(/[\s-_]+(.)?/g, (_, char) => char ? char.toUpperCase() : '')
-    .replace(/^(.)/, char => char.toUpperCase());
+    .replace(/[\s-_]+(.)?/g, (_, char) => (char ? char.toUpperCase() : ''))
+    .replace(/^(.)/, (char) => char.toUpperCase());
 }
 
 /**
@@ -79,6 +80,21 @@ export function toCamelCase(str: string): string {
 export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
   if (!schema) {
     return 'any';
+  }
+
+  // 处理 allOf 类型组合
+  if (schema.allOf && schema.allOf.length > 0) {
+    // 对于 allOf，通常第一个元素是引用类型
+    const firstSchema = schema.allOf[0];
+    if (firstSchema.$ref) {
+      const refName = firstSchema.$ref.split('/').pop();
+      return refName || 'any';
+    }
+    // 如果不是引用，尝试合并所有类型
+    const types = schema.allOf
+      .map((s) => swaggerTypeToTsType(s))
+      .filter((t) => t !== 'any');
+    return types.length > 0 ? types[0] : 'any';
   }
 
   // 处理引用类型
@@ -115,7 +131,7 @@ export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
       return 'number';
     case 'string':
       if (schema.enum) {
-        return schema.enum.map(value => `'${value}'`).join(' | ');
+        return schema.enum.map((value) => `'${value}'`).join(' | ');
       }
       return 'string';
     case 'boolean':
@@ -137,17 +153,19 @@ export function generateParameterTypes(parameters: SwaggerParameter[]): string {
     return '';
   }
 
-  const queryParams = parameters.filter(p => p.in === 'query');
-  const pathParams = parameters.filter(p => p.in === 'path');
-  const bodyParams = parameters.filter(p => p.in === 'body');
-  const formParams = parameters.filter(p => p.in === 'formData');
+  const queryParams = parameters.filter((p) => p.in === 'query');
+  const pathParams = parameters.filter((p) => p.in === 'path');
+  const bodyParams = parameters.filter((p) => p.in === 'body');
+  const formParams = parameters.filter((p) => p.in === 'formData');
 
   const types: string[] = [];
 
   // 路径参数
   if (pathParams.length > 0) {
     const pathType = pathParams
-      .map(p => `${p.name}: ${swaggerTypeToTsType({ type: p.type || 'string' })}`)
+      .map(
+        (p) => `${p.name}: ${swaggerTypeToTsType({ type: p.type || 'string' })}`
+      )
       .join(', ');
     types.push(`pathParams: { ${pathType} }`);
   }
@@ -155,12 +173,14 @@ export function generateParameterTypes(parameters: SwaggerParameter[]): string {
   // 查询参数
   if (queryParams.length > 0) {
     const queryType = queryParams
-      .map(p => {
+      .map((p) => {
         const optional = p.required ? '' : '?';
         return `${p.name}${optional}: ${swaggerTypeToTsType({ type: p.type || 'string' })}`;
       })
       .join(', ');
-    types.push(`queryParams${queryParams.every(p => !p.required) ? '?' : ''}: { ${queryType} }`);
+    types.push(
+      `queryParams${queryParams.every((p) => !p.required) ? '?' : ''}: { ${queryType} }`
+    );
   }
 
   // 请求体参数
@@ -173,7 +193,7 @@ export function generateParameterTypes(parameters: SwaggerParameter[]): string {
   // 表单参数
   if (formParams.length > 0) {
     const formType = formParams
-      .map(p => {
+      .map((p) => {
         const optional = p.required ? '' : '?';
         return `${p.name}${optional}: ${swaggerTypeToTsType({ type: p.type || 'string' })}`;
       })
@@ -209,7 +229,9 @@ export function removeDirectory(dirPath: string): void {
  * @param input 文件路径或URL
  * @returns Swagger文档对象
  */
-export async function loadSwaggerDocument(input: string): Promise<SwaggerDocument> {
+export async function loadSwaggerDocument(
+  input: string
+): Promise<SwaggerDocument> {
   try {
     if (input.startsWith('http://') || input.startsWith('https://')) {
       // 从URL加载
@@ -247,29 +269,29 @@ export function generateApiComment(
   parameters: SwaggerParameter[]
 ): string {
   const comments: string[] = ['/**'];
-  
+
   if (operation.summary) {
     comments.push(` * ${operation.summary}`);
   }
-  
+
   if (operation.description && operation.description !== operation.summary) {
     comments.push(` * ${operation.description}`);
   }
-  
+
   if (parameters && parameters.length > 0) {
     comments.push(' *');
-    parameters.forEach(param => {
+    parameters.forEach((param) => {
       const description = param.description || '';
       comments.push(` * @param ${param.name} ${description}`);
     });
   }
-  
+
   if (operation.deprecated) {
     comments.push(' * @deprecated');
   }
-  
+
   comments.push(' */');
-  
+
   return comments.join('\n');
 }
 
@@ -289,21 +311,28 @@ export function sanitizeFilename(filename: string): string {
  */
 export function getResponseType(responses: any): string {
   // 优先获取200响应
-  const successResponse = responses['200'] || responses['201'] || responses['default'];
-  
+  const successResponse =
+    responses['200'] || responses['201'] || responses['default'];
+
   if (!successResponse) {
     return 'any';
   }
-  
+
   // 支持OpenAPI 3.0格式 (content.application/json.schema)
-  if (successResponse.content && successResponse.content['application/json'] && successResponse.content['application/json'].schema) {
-    return swaggerTypeToTsType(successResponse.content['application/json'].schema);
+  if (
+    successResponse.content &&
+    successResponse.content['application/json'] &&
+    successResponse.content['application/json'].schema
+  ) {
+    return swaggerTypeToTsType(
+      successResponse.content['application/json'].schema
+    );
   }
-  
+
   // 支持Swagger 2.0格式 (直接schema)
   if (successResponse.schema) {
     return swaggerTypeToTsType(successResponse.schema);
   }
-  
+
   return 'any';
 }
