@@ -14,7 +14,7 @@ const packageJson = JSON.parse(
 );
 
 program
-  .name('swagger2api')
+  .name('swagger2api-v3')
   .description('从 Swagger/OpenAPI 文档生成 TypeScript API 接口')
   .version(packageJson.version);
 

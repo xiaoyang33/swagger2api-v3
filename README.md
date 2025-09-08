@@ -1,4 +1,4 @@
-# Swagger2API
+# Swagger2API-v3
 
 一个强大的 npm 工具包，用于从 Swagger JSON 文档生成前端接口代码。支持 TypeScript，按标签分组，详细注释生成等功能。
 
@@ -15,13 +15,13 @@
 
 ```bash
 # 使用 pnpm（推荐）
-pnpm add swagger2api
+pnpm add swagger2api-v3
 
 # 使用 npm
-npm install swagger2api
+npm install swagger2api-v3
 
 # 使用 yarn
-yarn add swagger2api
+yarn add swagger2api-v3
 ```
 
 ## 快速开始
@@ -30,7 +30,7 @@ yarn add swagger2api
 
 ```bash
 # 创建基础配置文件
-npx swagger2api init
+npx swagger2api-v3 init
 ```
 
 ### 2. 配置 `.swagger.config.ts`
@@ -69,7 +69,7 @@ module.exports = config;
 
 ```bash
 # 使用配置文件生成
-npx swagger2api generate
+npx swagger2api-v3 generate
 
 # 或者通过 npm script
 npm run swagger:generate
@@ -82,29 +82,29 @@ npm run swagger:generate
 ```json
 {
   "scripts": {
-    "swagger:generate": "npx swagger2api generate",
-    "swagger:run": "npx swagger2api run",
-    "swagger:init": "npx swagger2api init",
-    "swagger:validate": "npx swagger2api validate"
+    "swagger:generate": "npx swagger2api-v3 generate",
+    "swagger:run": "npx swagger2api-v3 run",
+    "swagger:init": "npx swagger2api-v3 init",
+    "swagger:validate": "npx swagger2api-v3 validate"
   }
 }
 ```
 
 ## CLI 命令
 
-### `swagger2api run`
+### `swagger2api-v3 run`
 
 运行 `.swagger.config.ts` 配置文件生成接口代码：
 
 ```bash
 # 使用默认配置文件
-swagger2api run
+swagger2api-v3 run
 
 # 指定配置文件
-swagger2api run -c ./custom.swagger.config.ts
+swagger2api-v3 run -c ./custom.swagger.config.ts
 ```
 
-### `swagger2api generate`
+### `swagger2api-v3 generate`
 
 使用配置文件生成接口代码：
 
@@ -116,31 +116,31 @@ swagger2api generate
 npm run swagger:generate
 ```
 
-### `swagger2api init`
+### `swagger2api-v3 init`
 
 初始化配置文件：
 
 ```bash
 # 创建基础配置
-swagger2api init
+swagger2api-v3 init
 
 # 创建示例配置
-swagger2api init --example
+swagger2api-v3 init --example
 
 # 指定输出路径
-swagger2api init -o ./config/swagger.config.ts
+swagger2api-v3 init -o ./config/swagger.config.ts
 ```
 
-### `swagger2api validate`
+### `swagger2api-v3 validate`
 
 验证 Swagger 文档：
 
 ```bash
 # 验证文件
-swagger2api validate -i ./swagger.json
+swagger2api-v3 validate -i ./swagger.json
 
 # 使用配置文件验证
-swagger2api validate -c ./.swagger.config.ts
+swagger2api-v3 validate -c ./.swagger.config.ts
 ```
 
 ## 配置选项
@@ -418,7 +418,7 @@ test/
 ```bash
 # 克隆项目
 git clone <repository-url>
-cd swagger2api
+cd swagger2api-v3
 
 # 安装依赖
 npm install
