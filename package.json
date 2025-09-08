@@ -1,11 +1,11 @@
 {
-  "name": "swagger2api",
+  "name": "swagger2api-v3",
   "version": "1.0.0",
   "description": "从 Swagger/OpenAPI 文档生成 TypeScript API 接口的命令行工具",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "swagger2api": "dist/cli/index.js"
+    "swagger2api-v3": "dist/cli/index.js"
   },
   "files": [
     "dist",
@@ -40,15 +40,15 @@
     "cli",
     "code-generation"
   ],
-  "author": "swagger2api",
+  "author": "xiaoyang",
   "license": "MIT",
-  "homepage": "https://github.com/xiaoyang33/swagger2api#readme",
+  "homepage": "https://github.com/xiaoyang33/swagger2api-v3#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/xiaoyang33/swagger2api.git"
+    "url": "https://github.com/xiaoyang33/swagger2api-v3.git"
   },
   "bugs": {
-    "url": "https://github.com/xiaoyang33/swagger2api/issues"
+    "url": "https://github.com/xiaoyang33/swagger2api-v3/issues"
   },
   "packageManager": "pnpm@10.11.0",
   "type": "commonjs",
