@@ -20,11 +20,13 @@ export class Swagger2API {
   async generate(): Promise<void> {
     try {
       console.log('🚀 开始生成API接口文件...');
-      
+
       // 1. 加载Swagger文档
       console.log('📖 加载Swagger文档...');
       const document = await loadSwaggerDocument(this.config.input);
-      console.log(`✅ 成功加载文档: ${document.info.title} v${document.info.version}`);
+      console.log(
+        `✅ 成功加载文档: ${document.info.title} v${document.info.version}`
+      );
 
       // 2. 解析文档
       console.log('🔍 解析API接口...');
@@ -32,9 +34,9 @@ export class Swagger2API {
       const apis = parser.parseApis();
       const types = parser.parseTypes();
       const groupedApis = parser.groupApisByTags(apis);
-      
+
       console.log(`✅ 解析完成: ${apis.length} 个接口, ${types.length} 个类型`);
-      
+
       if (this.config.groupByTags) {
         console.log(`📁 按标签分组: ${groupedApis.size} 个分组`);
         for (const [tag, tagApis] of groupedApis) {
@@ -46,9 +48,8 @@ export class Swagger2API {
       console.log('⚡ 生成代码文件...');
       const generator = new CodeGenerator(this.config);
       await generator.generateAll(apis, types, groupedApis);
-      
+
       console.log(`✅ 代码生成完成，输出目录: ${this.config.output}`);
-      
     } catch (error) {
       console.error('❌ 生成失败:', error);
       throw error;
@@ -75,7 +76,7 @@ export class Swagger2API {
 
     if (errors.length > 0) {
       console.error('❌ 配置验证失败:');
-      errors.forEach(error => console.error(`   - ${error}`));
+      errors.forEach((error) => console.error(`   - ${error}`));
       return false;
     }
 
@@ -90,39 +91,28 @@ export class Swagger2API {
 export async function generateFromConfig(configPath?: string): Promise<void> {
   const configFile = configPath || '.swagger.config.ts';
   const fullPath = path.resolve(process.cwd(), configFile);
-  
+
   try {
     let config: SwaggerConfig;
-    
-    // 检查文件扩展名，决定使用require还是import
-    if (fullPath.endsWith('.ts') || fullPath.endsWith('.js')) {
-      // 对于TypeScript文件，先尝试require，如果失败再尝试import
-      try {
-        // 清除require缓存
-        delete require.cache[fullPath];
-        const configModule = require(fullPath);
-        config = configModule.default || configModule;
-      } catch (requireError) {
-        // 如果require失败，尝试import
-        const configModule = await import(fullPath);
-        config = configModule.default || configModule;
-      }
-    } else {
-      // 其他文件类型使用import
-      const configModule = await import(fullPath);
-      config = configModule.default || configModule;
-    }
-    
+
+    // 使用动态import加载配置文件以支持ES模块语法
+    const fileUrl = `file:///${fullPath.replace(/\\/g, '/')}?t=${Date.now()}`;
+    const dynamicImport = new Function('specifier', 'return import(specifier)');
+    const configModule = await dynamicImport(fileUrl);
+    config = configModule.default || configModule;
+
     const swagger2api = new Swagger2API(config);
-    
+
     if (!swagger2api.validateConfig()) {
       process.exit(1);
     }
-    
+
     await swagger2api.generate();
-    
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Cannot resolve module')) {
+    if (
+      error instanceof Error &&
+      error.message.includes('Cannot resolve module')
+    ) {
       console.error(`❌ 找不到配置文件: ${fullPath}`);
       console.error('请确保配置文件存在并且路径正确');
     } else {
@@ -138,11 +128,11 @@ export async function generateFromConfig(configPath?: string): Promise<void> {
  */
 export async function generate(config: SwaggerConfig): Promise<void> {
   const swagger2api = new Swagger2API(config);
-  
+
   if (!swagger2api.validateConfig()) {
     throw new Error('配置验证失败');
   }
-  
+
   await swagger2api.generate();
 }
 

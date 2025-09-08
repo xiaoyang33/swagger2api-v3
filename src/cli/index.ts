@@ -72,7 +72,19 @@ program
       process.exit(1);
     }
 
-    const configTemplate = `/**
+    // 检测当前项目的模块类型
+    let isESModule = false;
+    const packageJsonPath = path.resolve(process.cwd(), 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+        isESModule = packageJson.type === 'module';
+      } catch (error) {
+        console.warn('⚠️ 无法读取package.json，使用默认CommonJS格式');
+      }
+    }
+
+    const configContent = `/**
  * Swagger2API 配置文件
  * 用于配置从 Swagger JSON 生成前端接口的参数
  */
@@ -108,11 +120,11 @@ const config = {
   }
 };
 
-module.exports = config;
+${isESModule ? 'export default config;' : 'module.exports = config;'}
 `;
 
     try {
-      fs.writeFileSync(configPath, configTemplate, 'utf-8');
+      fs.writeFileSync(configPath, configContent, 'utf-8');
       console.log('✅ 配置文件已创建:', configPath);
       console.log('💡 请根据需要修改配置文件，然后运行 swagger2api generate');
     } catch (error) {
