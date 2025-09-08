@@ -428,8 +428,9 @@ export class CodeGenerator {
       case 'kebab-case':
         return toKebabCase(cleanTag);
       case 'tag':
-      default:
         return cleanTag.toLowerCase();
+      default:
+        return toCamelCase(cleanTag);
     }
   }
 
