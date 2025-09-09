@@ -128,18 +128,20 @@ export interface UserInfo {
 ### 生成的 API 接口
 
 ```typescript
-// auth/index.ts
+// authController/index.ts
 import { request } from '@/utils/request';
-import type { LoginDto, UserInfo } from '../types';
+import type { LoginDto, LoginRespDto } from '../types';
 
 /**
- * 用户登录
+ * 登录
  * @param data 登录参数
+ * @param config 可选的请求配置
  */
-export const login = (data: LoginDto) => {
-  return request.post<UserInfo>({
-    url: '/auth/login',
-    data
+export const authControllerLoginPost = (data: LoginDto, config?: any) => {
+  return request.post<LoginRespDto>({
+    url: '/admin/auth/login',
+    data,
+    ...config
   });
 };
 ```
