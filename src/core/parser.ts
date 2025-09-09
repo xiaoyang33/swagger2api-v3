@@ -35,13 +35,28 @@ export class SwaggerParser {
     const paths = this.document.paths;
 
     for (const [path, pathItem] of Object.entries(paths)) {
-      const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
-      
+      const methods = [
+        'get',
+        'post',
+        'put',
+        'delete',
+        'patch',
+        'head',
+        'options'
+      ];
+
       for (const method of methods) {
-        const operation = pathItem[method as keyof typeof pathItem] as SwaggerOperation;
+        const operation = pathItem[
+          method as keyof typeof pathItem
+        ] as SwaggerOperation;
         if (!operation) continue;
 
-        const apiInfo = this.parseOperation(method, path, operation, pathItem.parameters);
+        const apiInfo = this.parseOperation(
+          method,
+          path,
+          operation,
+          pathItem.parameters
+        );
         apis.push(apiInfo);
       }
     }
@@ -88,12 +103,14 @@ export class SwaggerParser {
     }
 
     // 生成函数名
-    let functionName = operation.operationId || pathToFunctionName(method, path);
-    
+    let functionName =
+      operation.operationId || pathToFunctionName(method, path);
+
     // 如果使用了operationId，需要手动添加HTTP方法后缀
     if (operation.operationId) {
       // 将HTTP方法转换为首字母大写的形式并添加到末尾
-      const methodSuffix = method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+      const methodSuffix =
+        method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
       functionName = functionName + methodSuffix;
     }
 
@@ -101,12 +118,16 @@ export class SwaggerParser {
     const responseType = getResponseType(operation.responses);
 
     // 获取请求体类型
-    const bodyParam = allParameters.find(p => p.in === 'body');
-    const requestBodyType = bodyParam ? swaggerTypeToTsType(bodyParam.schema) : undefined;
+    const bodyParam = allParameters.find((p) => p.in === 'body');
+    const requestBodyType = bodyParam
+      ? swaggerTypeToTsType(bodyParam.schema)
+      : undefined;
 
     // 解析参数信息
-    const parameters = allParameters.map(param => {
-      const type = param.schema ? swaggerTypeToTsType(param.schema) : swaggerTypeToTsType({ type: param.type || 'string' });
+    const parameters = allParameters.map((param) => {
+      const type = param.schema
+        ? swaggerTypeToTsType(param.schema)
+        : swaggerTypeToTsType({ type: param.type || 'string' });
       return {
         name: param.name,
         type,
@@ -135,7 +156,7 @@ export class SwaggerParser {
    */
   parseTypes(): TypeInfo[] {
     const types: TypeInfo[] = [];
-    
+
     // 解析 Swagger 2.0 definitions
     if (this.document.definitions) {
       for (const [name, schema] of Object.entries(this.document.definitions)) {
@@ -146,7 +167,9 @@ export class SwaggerParser {
 
     // 解析 OpenAPI 3.0 components.schemas
     if (this.document.components?.schemas) {
-      for (const [name, schema] of Object.entries(this.document.components.schemas)) {
+      for (const [name, schema] of Object.entries(
+        this.document.components.schemas
+      )) {
         const typeInfo = this.parseTypeDefinition(name, schema);
         types.push(typeInfo);
       }
@@ -171,11 +194,13 @@ export class SwaggerParser {
         .map(([key, value]: [string, any]) => {
           const optional = schema.required?.includes(key) ? '' : '?';
           const type = swaggerTypeToTsType(value);
-          const comment = value.description ? ` /** ${value.description} */` : '';
+          const comment = value.description
+            ? ` /** ${value.description} */`
+            : '';
           return `${comment}\n  ${key}${optional}: ${type};`;
         })
         .join('\n');
-      
+
       definition = `export interface ${typeName} {\n${properties}\n}`;
     } else if (schema.type === 'array') {
       // 数组类型
@@ -184,9 +209,9 @@ export class SwaggerParser {
     } else if (schema.enum) {
       // 枚举类型
       const enumValues = schema.enum
-        .map((value: any) => `  ${JSON.stringify(value)}`)
-        .join(' |\n');
-      definition = `export type ${typeName} =\n${enumValues};`;
+        .map((value: any) => `  ${value.toUpperCase()} = '${value}'`)
+        .join(',\n');
+      definition = `export enum ${typeName} {\n${enumValues}\n}`;
     } else {
       // 其他类型
       const type = swaggerTypeToTsType(schema);
@@ -210,7 +235,7 @@ export class SwaggerParser {
 
     for (const api of apis) {
       const tags = api.tags.length > 0 ? api.tags : ['default'];
-      
+
       for (const tag of tags) {
         if (!groupedApis.has(tag)) {
           groupedApis.set(tag, []);
@@ -228,20 +253,30 @@ export class SwaggerParser {
    */
   getTags(): string[] {
     const tags = new Set<string>();
-    
+
     // 从文档标签中获取
     if (this.document.tags) {
-      this.document.tags.forEach(tag => tags.add(tag.name));
+      this.document.tags.forEach((tag) => tags.add(tag.name));
     }
 
     // 从路径操作中获取
     for (const pathItem of Object.values(this.document.paths)) {
-      const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
-      
+      const methods = [
+        'get',
+        'post',
+        'put',
+        'delete',
+        'patch',
+        'head',
+        'options'
+      ];
+
       for (const method of methods) {
-        const operation = pathItem[method as keyof typeof pathItem] as SwaggerOperation;
+        const operation = pathItem[
+          method as keyof typeof pathItem
+        ] as SwaggerOperation;
         if (operation?.tags) {
-          operation.tags.forEach(tag => tags.add(tag));
+          operation.tags.forEach((tag) => tags.add(tag));
         }
       }
     }
