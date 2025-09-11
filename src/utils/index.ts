@@ -84,10 +84,41 @@ export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
 
   // 处理 allOf 类型组合
   if (schema.allOf && schema.allOf.length > 0) {
-    // 对于 allOf，通常第一个元素是引用类型
+    // 检查是否为泛型模式：第一个是引用类型，第二个定义了扩展属性
     const firstSchema = schema.allOf[0];
-    if (firstSchema.$ref) {
+    if (firstSchema.$ref && schema.allOf.length > 1) {
       const refName = firstSchema.$ref.split('/').pop();
+      const secondSchema = schema.allOf[1];
+
+      // 检查第二个 schema 是否定义了对象属性（可能没有 type 字段）
+      if (secondSchema.properties) {
+        // 获取所有扩展属性的类型
+        const propertyTypes: string[] = [];
+
+        for (const [propName, propSchema] of Object.entries(
+          secondSchema.properties
+        )) {
+          const propType = swaggerTypeToTsType(propSchema as any);
+          propertyTypes.push(propType);
+        }
+
+        // 如果只有一个属性，直接作为泛型参数
+        if (propertyTypes.length === 1) {
+          return `${refName}<${propertyTypes[0]}>`;
+        }
+        // 如果有多个属性，组合成联合类型或对象类型
+        else if (propertyTypes.length > 1) {
+          const combinedType = `{ ${Object.entries(secondSchema.properties)
+            .map(([key, value]) => {
+              const optional = secondSchema.required?.includes(key) ? '' : '?';
+              const type = swaggerTypeToTsType(value as any);
+              return `${key}${optional}: ${type}`;
+            })
+            .join('; ')} }`;
+          return `${refName}<${combinedType}>`;
+        }
+      }
+
       return refName || 'any';
     }
     // 如果不是引用，尝试合并所有类型

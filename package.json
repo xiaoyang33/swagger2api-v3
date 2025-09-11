@@ -1,6 +1,6 @@
 {
   "name": "swagger2api-v3",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "从 Swagger/OpenAPI 文档生成 TypeScript API 接口的命令行工具",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

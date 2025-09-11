@@ -38,7 +38,7 @@ export class CodeGenerator {
       // 默认为true，清空输出目录
       removeDirectory(this.config.output);
     }
-    
+
     // 确保输出目录存在
     ensureDirectoryExists(this.config.output);
 
@@ -92,11 +92,24 @@ export class CodeGenerator {
     ].join('\n');
 
     const typeDefinitions = types
-      .map(type => {
+      .map((type) => {
         const comment = type.description
           ? `/**\n * ${type.description}\n */\n`
           : '';
-        return `${comment}${type.definition}`;
+
+        // 通用处理：检测通用响应容器类型并转换为泛型接口
+        let definition = type.definition;
+        if (this.isGenericResponseContainer(type, definition)) {
+          const typeName = type.name;
+          definition = definition
+            .replace(
+              `export interface ${typeName} {`,
+              `export interface ${typeName}<T = Record<string, any>> {`
+            )
+            .replace('data: Record<string, any>;', 'data: T;');
+        }
+
+        return `${comment}${definition}`;
       })
       .join('\n\n');
 
@@ -115,13 +128,13 @@ export class CodeGenerator {
     for (const [tag, apis] of groupedApis) {
       const folderName = this.getTagFileName(tag);
       const tagFolderPath = path.join(this.config.output, folderName);
-      
+
       // 确保tag文件夹存在
       ensureDirectoryExists(tagFolderPath);
-      
+
       const filePath = path.join(tagFolderPath, 'index.ts');
       const content = this.generateApiFileContent(apis, types, tag);
-      
+
       writeFile(filePath, content);
     }
   }
@@ -131,10 +144,13 @@ export class CodeGenerator {
    * @param apis API接口数组
    * @param types 类型定义数组
    */
-  private async generateSingleApiFile(apis: ApiInfo[], types: TypeInfo[]): Promise<void> {
+  private async generateSingleApiFile(
+    apis: ApiInfo[],
+    types: TypeInfo[]
+  ): Promise<void> {
     const filePath = path.join(this.config.output, 'api.ts');
     const content = this.generateApiFileContent(apis, types);
-    
+
     writeFile(filePath, content);
   }
 
@@ -145,9 +161,14 @@ export class CodeGenerator {
    * @param tag 标签名称（可选）
    * @returns API文件内容
    */
-  private generateApiFileContent(apis: ApiInfo[], types: TypeInfo[], tag?: string): string {
-    const importTemplate = this.config.importTemplate || "import { request } from '@/utils'";
-    
+  private generateApiFileContent(
+    apis: ApiInfo[],
+    types: TypeInfo[],
+    tag?: string
+  ): string {
+    const importTemplate =
+      this.config.importTemplate || "import { request } from '@/utils'";
+
     const header = [
       '/**',
       ` * ${tag ? `${tag} ` : ''}API 接口`,
@@ -159,7 +180,7 @@ export class CodeGenerator {
 
     // 收集当前文件实际使用的类型
     const usedTypes = this.collectUsedTypes(apis);
-    
+
     // 添加类型导入
     if (usedTypes.length > 0) {
       const typeNames = usedTypes.join(', ');
@@ -169,7 +190,9 @@ export class CodeGenerator {
 
     header.push('');
 
-    const apiImplementations = apis.map(api => this.generateApiFunction(api)).join('\n\n');
+    const apiImplementations = apis
+      .map((api) => this.generateApiFunction(api))
+      .join('\n\n');
 
     return `${header.join('\n')}${apiImplementations}\n`;
   }
@@ -184,7 +207,7 @@ export class CodeGenerator {
 
     // 生成注释
     if (this.config.options?.addComments !== false) {
-      const swaggerParams = api.parameters.map(p => ({
+      const swaggerParams = api.parameters.map((p) => ({
         name: p.name,
         in: p.in,
         required: p.required,
@@ -199,24 +222,26 @@ export class CodeGenerator {
     }
 
     // 生成函数签名
-    const swaggerParameters = api.parameters.map(p => ({
+    const swaggerParameters = api.parameters.map((p) => ({
       name: p.name,
       in: p.in,
       required: p.required,
       type: p.type,
       schema: p.schema || { type: p.type }
     }));
-    
+
     // 生成直接参数形式
     const functionParams = this.generateDirectParameters(swaggerParameters);
     const responseType = api.responseType || 'any';
     const functionName = toCamelCase(api.name);
-    
+
     parts.push(`export const ${functionName} = (${functionParams}) => {`);
 
     // 生成请求配置
     const requestConfig = this.generateRequestConfig(api);
-    parts.push(`  return request.${api.method.toLowerCase()}<${responseType}>(${requestConfig});`);
+    parts.push(
+      `  return request.${api.method.toLowerCase()}<${responseType}>(${requestConfig});`
+    );
     parts.push('}');
 
     return parts.join('\n');
@@ -229,53 +254,55 @@ export class CodeGenerator {
    */
   private generateDirectParameters(parameters: any[]): string {
     const params: string[] = [];
-    
-    const queryParams = parameters.filter(p => p.in === 'query');
-    const pathParams = parameters.filter(p => p.in === 'path');
-    const bodyParams = parameters.filter(p => p.in === 'body');
-    const formParams = parameters.filter(p => p.in === 'formData');
-    
+
+    const queryParams = parameters.filter((p) => p.in === 'query');
+    const pathParams = parameters.filter((p) => p.in === 'path');
+    const bodyParams = parameters.filter((p) => p.in === 'body');
+    const formParams = parameters.filter((p) => p.in === 'formData');
+
     // 合并路径参数和查询参数为一个params对象
     const allParams = [...pathParams, ...queryParams];
     if (allParams.length > 0) {
       const paramType = allParams
-        .map(p => {
+        .map((p) => {
           const optional = p.required ? '' : '?';
           return `${p.name}${optional}: ${p.type}`;
         })
         .join(', ');
-      
+
       // 检查是否所有参数都是可选的
-      const allOptional = allParams.every(p => !p.required);
+      const allOptional = allParams.every((p) => !p.required);
       const optionalModifier = allOptional ? '?' : '';
-      
+
       params.push(`params${optionalModifier}: { ${paramType} }`);
     }
-    
+
     // 请求体参数
     if (bodyParams.length > 0) {
       const bodyParam = bodyParams[0];
-      const bodyType = bodyParam.schema ? this.getTypeFromSchema(bodyParam.schema) : bodyParam.type;
+      const bodyType = bodyParam.schema
+        ? this.getTypeFromSchema(bodyParam.schema)
+        : bodyParam.type;
       params.push(`data: ${bodyType}`);
     }
-    
+
     // 表单参数
     if (formParams.length > 0) {
       const formType = formParams
-        .map(p => {
+        .map((p) => {
           const optional = p.required ? '' : '?';
           return `${p.name}${optional}: ${p.type}`;
         })
         .join(', ');
       params.push(`data: { ${formType} }`);
     }
-    
+
     // 添加可选的config参数
     params.push('config?: any');
-    
+
     return params.join(', ');
   }
-  
+
   /**
    * 从schema获取类型
    * @param schema Swagger schema
@@ -296,18 +323,23 @@ export class CodeGenerator {
   private collectUsedTypes(apis: ApiInfo[]): string[] {
     const usedTypes = new Set<string>();
 
-    apis.forEach(api => {
+    apis.forEach((api) => {
       // 收集响应类型
       if (api.responseType && api.responseType !== 'any') {
-        usedTypes.add(api.responseType);
+        // 提取泛型类型中的所有类型名称
+        this.extractTypeNames(api.responseType).forEach((typeName) => {
+          usedTypes.add(typeName);
+        });
       }
 
       // 收集参数类型
-      api.parameters.forEach(param => {
+      api.parameters.forEach((param) => {
         if (param.schema) {
           const type = this.getTypeFromSchema(param.schema);
           if (type && type !== 'any' && !this.isPrimitiveType(type)) {
-            usedTypes.add(type);
+            this.extractTypeNames(type).forEach((typeName) => {
+              usedTypes.add(typeName);
+            });
           }
         } else if (param.type && !this.isPrimitiveType(param.type)) {
           usedTypes.add(param.type);
@@ -319,13 +351,70 @@ export class CodeGenerator {
   }
 
   /**
+   * 从类型字符串中提取所有类型名称（包括泛型参数）
+   * @param typeStr 类型字符串，如 "ResOp<UserListRespDto>"
+   * @returns 类型名称数组，如 ["ResOp", "UserListRespDto"]
+   */
+  private extractTypeNames(typeStr: string): string[] {
+    const typeNames = new Set<string>();
+
+    // 匹配所有标识符（类型名称）
+    const matches = typeStr.match(/[A-Za-z_][A-Za-z0-9_]*/g);
+    if (matches) {
+      matches.forEach((match) => {
+        if (!this.isPrimitiveType(match)) {
+          typeNames.add(match);
+        }
+      });
+    }
+
+    return Array.from(typeNames);
+  }
+
+  /**
    * 判断是否为基础类型
    * @param type 类型名称
    * @returns 是否为基础类型
    */
   private isPrimitiveType(type: string): boolean {
-    const primitiveTypes = ['string', 'number', 'boolean', 'object', 'array', 'any', 'void', 'null', 'undefined'];
+    const primitiveTypes = [
+      'string',
+      'number',
+      'boolean',
+      'object',
+      'array',
+      'any',
+      'void',
+      'null',
+      'undefined'
+    ];
     return primitiveTypes.includes(type.toLowerCase());
+  }
+
+  /**
+   * 检测是否为通用响应容器类型
+   * @param type 类型信息
+   * @param definition 类型定义
+   * @returns 是否为通用响应容器类型
+   */
+  private isGenericResponseContainer(
+    type: TypeInfo,
+    definition: string
+  ): boolean {
+    // 检查是否为接口定义
+    if (!definition.includes(`export interface ${type.name} {`)) {
+      return false;
+    }
+
+    // 检查是否包含 data 字段且类型为 Record<string, any>
+    const hasDataField = definition.includes('data: Record<string, any>;');
+
+    // 检查是否包含其他常见的响应容器字段
+    const hasCommonFields = ['code', 'message', 'success', 'status'].some(
+      (field) => definition.includes(`${field}:`)
+    );
+
+    return hasDataField && hasCommonFields;
   }
 
   /**
@@ -335,21 +424,21 @@ export class CodeGenerator {
    */
   private generateRequestConfig(api: ApiInfo): string {
     const config: string[] = [];
-    
+
     // URL处理
     let url = api.path;
-    
+
     // 添加prefix前缀
     if (this.config.prefix) {
       url = this.config.prefix + url;
     }
-    
-    const pathParams = api.parameters.filter(p => p.in === 'path');
-    const queryParams = api.parameters.filter(p => p.in === 'query');
-    
+
+    const pathParams = api.parameters.filter((p) => p.in === 'path');
+    const queryParams = api.parameters.filter((p) => p.in === 'query');
+
     if (pathParams.length > 0) {
       // 替换路径参数，从params对象中获取
-      pathParams.forEach(param => {
+      pathParams.forEach((param) => {
         url = url.replace(`{${param.name}}`, `\${params.${param.name}}`);
       });
       config.push(`url: \`${url}\``);
@@ -364,15 +453,15 @@ export class CodeGenerator {
     }
 
     // 请求体数据
-    const bodyParams = api.parameters.filter(p => p.in === 'body');
-    const formParams = api.parameters.filter(p => p.in === 'formData');
-    
+    const bodyParams = api.parameters.filter((p) => p.in === 'body');
+    const formParams = api.parameters.filter((p) => p.in === 'formData');
+
     if (bodyParams.length > 0) {
       config.push('data');
     } else if (formParams.length > 0) {
       config.push('data');
     }
-    
+
     // 添加config参数合并
     config.push('...config');
 
@@ -383,12 +472,14 @@ export class CodeGenerator {
    * 生成入口文件
    * @param groupedApis 按标签分组的API
    */
-  private async generateIndexFile(groupedApis: Map<string, ApiInfo[]>): Promise<void> {
+  private async generateIndexFile(
+    groupedApis: Map<string, ApiInfo[]>
+  ): Promise<void> {
     const exports: string[] = [];
-    
+
     // 导出类型
     exports.push("export * from './types';");
-    
+
     if (this.config.groupByTags) {
       // 按标签导出
       for (const tag of groupedApis.keys()) {
@@ -421,7 +512,7 @@ export class CodeGenerator {
    */
   private getTagFileName(tag: string): string {
     const cleanTag = sanitizeFilename(tag);
-    
+
     switch (this.config.tagGrouping?.fileNaming) {
       case 'camelCase':
         return toCamelCase(cleanTag);
@@ -439,14 +530,18 @@ export class CodeGenerator {
    */
   private async runLintOnAllFiles(): Promise<void> {
     if (!this.config.lint) return;
-    
+
     try {
       const { exec } = require('child_process');
       const util = require('util');
       const execPromise = util.promisify(exec);
-      
-      console.log(`🎨 Running lint command: ${this.config.lint} ${this.config.output}`);
-      const result = await execPromise(`${this.config.lint} ${this.config.output}`);
+
+      console.log(
+        `🎨 Running lint command: ${this.config.lint} ${this.config.output}`
+      );
+      const result = await execPromise(
+        `${this.config.lint} ${this.config.output}`
+      );
       if (result.stdout) {
         console.log(result.stdout);
       }
