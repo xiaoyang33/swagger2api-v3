@@ -209,7 +209,21 @@ export class SwaggerParser {
     } else if (schema.enum) {
       // 枚举类型
       const enumValues = schema.enum
-        .map((value: any) => `  ${value.toUpperCase()} = '${value}'`)
+        .map((value: any, index: number) => {
+          let key = value;
+          
+          // 优先使用 x-enum-varnames 或 x-enumNames 扩展字段
+          if ((schema['x-enum-varnames'] && schema['x-enum-varnames'][index]) || 
+              (schema['x-enumNames'] && schema['x-enumNames'][index])) {
+            key = schema['x-enum-varnames']?.[index] || schema['x-enumNames']?.[index];
+          } else if (/^\d+$/.test(value)) {
+            // 对于数字枚举，使用 VALUE_ 前缀
+            key = `VALUE_${value}`;
+          } else {
+            key = value.toUpperCase();
+          }
+          return `  ${key} = '${value}'`;
+        })
         .join(',\n');
       definition = `export enum ${typeName} {\n${enumValues}\n}`;
     } else {
