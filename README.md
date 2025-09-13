@@ -26,7 +26,7 @@ npm install swagger2api-v3
 ### 1. 初始化配置文件
 
 ```bash
-swagger2api-v3 init
+npx swagger2api-v3 init
 ```
 
 ### 2. 配置文件说明
@@ -64,7 +64,7 @@ export default config;
 ### 3. 生成接口代码
 
 ```bash
-swagger2api-v3 generate
+npx swagger2api-v3 generate
 ```
 
 ## ⚙️ 配置选项
@@ -150,16 +150,16 @@ export const authControllerLoginPost = (data: LoginDto, config?: any) => {
 
 ```bash
 # 初始化配置文件
-swagger2api-v3 init [--force]
+npx swagger2api-v3 init [--force]
 
 # 生成接口代码
-swagger2api-v3 generate [--config <path>]
+npx swagger2api-v3 generate [--config <path>]
 
 # 验证配置文件
-swagger2api-v3 validate [--config <path>]
+npx swagger2api-v3 validate [--config <path>]
 
 # 查看帮助
-swagger2api-v3 --help
+npx swagger2api-v3 --help
 ```
 
 ## 📝 NPM 脚本
@@ -170,7 +170,8 @@ swagger2api-v3 --help
 {
   "scripts": {
     "api:generate": "swagger2api-v3 generate",
-    "api:init": "swagger2api-v3 init"
+    "api:init": "swagger2api-v3 init",
+    "api:validate": "swagger2api-v3 validate"
   }
 }
 ```
