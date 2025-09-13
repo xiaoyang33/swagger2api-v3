@@ -1,6 +1,6 @@
 # Swagger2API-v3
 
-一个强大的命令行工具，用于从 Swagger/OpenAPI 文档自动生成 TypeScript 接口代码。
+一个强大的命令行工具，用于从 Swagger(OAS3.0) 文档自动生成 TypeScript 接口代码。
 
 ## ✨ 特性
 

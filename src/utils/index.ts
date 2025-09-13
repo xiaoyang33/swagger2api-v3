@@ -327,11 +327,38 @@ export function generateApiComment(
   }
 
   if (parameters && parameters.length > 0) {
-    comments.push(' *');
-    parameters.forEach((param) => {
-      const description = param.description || '';
-      comments.push(` * @param ${param.name} ${description}`);
-    });
+    // 收集不同类型的参数
+    const queryParams = parameters.filter((p) => p.in === 'query');
+    const pathParams = parameters.filter((p) => p.in === 'path');
+    const bodyParams = parameters.filter((p) => p.in === 'body');
+    const formParams = parameters.filter((p) => p.in === 'formData');
+    
+    const hasParams = queryParams.length > 0 || pathParams.length > 0;
+    const hasData = bodyParams.length > 0 || formParams.length > 0;
+    
+    if (hasParams || hasData) {
+      comments.push(' *');
+      
+      // 如果有查询参数或路径参数，添加params注释
+      if (hasParams) {
+        const paramDescriptions = [...pathParams, ...queryParams]
+          .map(p => p.description || '')
+          .filter(desc => desc)
+          .join(', ');
+        const description = paramDescriptions || '请求参数';
+        comments.push(` * @param params ${description}`);
+      }
+      
+      // 如果有请求体参数，添加data注释
+      if (hasData) {
+        const dataParam = bodyParams[0] || formParams[0];
+        const description = dataParam?.description || '请求数据';
+        comments.push(` * @param data ${description}`);
+      }
+      
+      // 添加config参数注释
+      comments.push(` * @param config 可选的请求配置`);
+    }
   }
 
   if (operation.deprecated) {
