@@ -73,16 +73,17 @@ program
     }
 
     // 检测当前项目的模块类型
-    let isESModule = false;
+    let isESModule = true; // 默认使用 ES Module
     const packageJsonPath = path.resolve(process.cwd(), 'package.json');
     if (fs.existsSync(packageJsonPath)) {
       try {
         const packageJson = JSON.parse(
           fs.readFileSync(packageJsonPath, 'utf-8')
         );
-        isESModule = packageJson.type === 'module';
+        // 只有明确设置为 commonjs 时才使用 CommonJS，否则默认使用 ES Module
+        isESModule = packageJson.type !== 'commonjs';
       } catch (error) {
-        console.warn('⚠️ 无法读取package.json，使用默认CommonJS格式');
+        console.warn('⚠️ 无法读取package.json，使用默认ES Module格式');
       }
     }
 
