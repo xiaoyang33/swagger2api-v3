@@ -1,39 +1,41 @@
 # Swagger2API-v3
 
-一个强大的命令行工具，用于从 Swagger/OpenAPI 文档自动生成 TypeScript 接口代码。
+English | [中文](./README_CN.md)
 
-## ✨ 特性
+A powerful command-line tool for automatically generating TypeScript interface code from Swagger (OAS3.0) documentation.
 
-- 🚀 **快速生成** - 从 Swagger JSON 快速生成 TypeScript 接口代码
-- 📁 **智能分组** - 支持按 Swagger 标签自动分组生成文件
-- 📝 **详细注释** - 自动生成包含描述、参数、返回值的详细注释
-- 🎨 **代码格式化** - 支持自定义格式化命令
-- ⚙️ **环境适配** - 自动检测项目环境，生成对应格式的配置文件
-- 🔧 **CLI 工具** - 提供完整的命令行工具
+## ✨ Features
 
-## 📦 安装
+- 🚀 **Fast Generation** - Quickly generate TypeScript interface code from Swagger JSON
+- 📁 **Smart Grouping** - Support automatic file grouping by Swagger tags
+- 📝 **Detailed Comments** - Automatically generate detailed comments including descriptions, parameters, and return values
+- 🎨 **Code Formatting** - Support custom formatting commands
+- ⚙️ **Environment Adaptation** - Automatically detect project environment and generate corresponding configuration files
+- 🔧 **CLI Tool** - Provide complete command-line tools
+
+## 📦 Installation
 
 ```bash
-# 全局安装
+# Global installation
 npm install -g swagger2api-v3
 
-# 项目依赖
+# Project dependency
 npm install swagger2api-v3
 ```
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 1. 初始化配置文件
+### 1. Initialize Configuration File
 
 ```bash
-swagger2api-v3 init
+npx swagger2api-v3 init
 ```
 
-### 2. 配置文件说明
+### 2. Configuration File Description
 
-工具会根据项目环境自动生成对应格式的配置文件：
+The tool automatically generates configuration files in the corresponding format based on the project environment:
 
-**CommonJS 环境** (`"type": "commonjs"` 或未设置)：
+**CommonJS Environment** (`"type": "commonjs"` or not set):
 ```javascript
 const config = {
   input: 'https://petstore.swagger.io/v2/swagger.json',
@@ -52,80 +54,80 @@ const config = {
 module.exports = config;
 ```
 
-**ES 模块环境** (`"type": "module"`)：
+**ES Module Environment** (`"type": "module"`):
 ```javascript
 const config = {
-  // ... 相同配置
+  // ... same configuration
 };
 
 export default config;
 ```
 
-### 3. 生成接口代码
+### 3. Generate Interface Code
 
 ```bash
-swagger2api-v3 generate
+npx swagger2api-v3 generate
 ```
 
-## ⚙️ 配置选项
+## ⚙️ Configuration Options
 
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `input` | string | - | Swagger JSON 文件路径或 URL |
-| `output` | string | `'./src/api'` | 生成代码的输出目录 |
-| `generator` | string | `'typescript'` | 代码生成器类型 |
-| `groupByTags` | boolean | `true` | 是否按标签分组生成文件 |
-| `overwrite` | boolean | `true` | 是否覆盖已存在的文件 |
-| `prefix` | string | `''` | 接口路径公共前缀 |
-| `importTemplate` | string | - | request 函数导入语句模板 |
-| `lint` | string | - | 代码格式化命令（可选） |
-| `options.addComments` | boolean | `true` | 是否添加详细注释 |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `input` | string | - | Swagger JSON file path or URL |
+| `output` | string | `'./src/api'` | Output directory for generated code |
+| `generator` | string | `'typescript'` | Code generator type |
+| `groupByTags` | boolean | `true` | Whether to group files by tags |
+| `overwrite` | boolean | `true` | Whether to overwrite existing files |
+| `prefix` | string | `''` | Common prefix for API paths |
+| `importTemplate` | string | - | Import statement template for request function |
+| `lint` | string | - | Code formatting command (optional) |
+| `options.addComments` | boolean | `true` | Whether to add detailed comments |
 
-## 📁 生成的文件结构
+## 📁 Generated File Structure
 
-### 按标签分组 (推荐)
-
-```
-src/api/
-├── types.ts           # 数据类型定义
-├── user/              # User 相关接口
-│   └── index.ts
-├── auth/              # Auth 相关接口
-│   └── index.ts
-└── index.ts          # 入口文件
-```
-
-### 不分组
+### Grouped by Tags (Recommended)
 
 ```
 src/api/
-├── types.ts       # 数据类型定义
-├── api.ts         # 所有 API 接口
-└── index.ts       # 入口文件
+├── types.ts           # Data type definitions
+├── user/              # User-related APIs
+│   └── index.ts
+├── auth/              # Auth-related APIs
+│   └── index.ts
+└── index.ts          # Entry file
 ```
 
-## 💡 使用示例
+### Not Grouped
 
-### 生成的类型定义
+```
+src/api/
+├── types.ts       # Data type definitions
+├── api.ts         # All API interfaces
+└── index.ts       # Entry file
+```
+
+## 💡 Usage Examples
+
+### Generated Type Definitions
 
 ```typescript
 // types.ts
 export interface LoginDto {
-  /** 账号 */
+  /** Account */
   account: string;
-  /** 密码 */
+  /** Password */
   password: string;
 }
 
 export interface UserInfo {
-  /** 用户ID */
+  /** User ID */
   id: string;
-  /** 用户名 */
+  /** Username */
   username: string;
 }
 ```
 
-### 生成的 API 接口
+### Generated API Interfaces
 
 ```typescript
 // authController/index.ts
@@ -133,9 +135,9 @@ import { request } from '@/utils/request';
 import type { LoginDto, LoginRespDto } from '../types';
 
 /**
- * 登录
- * @param data 登录参数
- * @param config 可选的请求配置
+ * Login
+ * @param data Login parameters
+ * @param config Optional request configuration
  */
 export const authControllerLoginPost = (data: LoginDto, config?: any) => {
   return request.post<LoginRespDto>({
@@ -146,51 +148,52 @@ export const authControllerLoginPost = (data: LoginDto, config?: any) => {
 };
 ```
 
-## 🔧 CLI 命令
+## 🔧 CLI Commands
 
 ```bash
-# 初始化配置文件
-swagger2api-v3 init [--force]
+# Initialize configuration file
+npx swagger2api-v3 init [--force]
 
-# 生成接口代码
-swagger2api-v3 generate [--config <path>]
+# Generate interface code
+npx swagger2api-v3 generate [--config <path>]
 
-# 验证配置文件
-swagger2api-v3 validate [--config <path>]
+# Validate configuration file
+npx swagger2api-v3 validate [--config <path>]
 
-# 查看帮助
-swagger2api-v3 --help
+# Show help
+npx swagger2api-v3 --help
 ```
 
-## 📝 NPM 脚本
+## 📝 NPM Scripts
 
-在 `package.json` 中添加：
+Add to `package.json`:
 
 ```json
 {
   "scripts": {
     "api:generate": "swagger2api-v3 generate",
-    "api:init": "swagger2api-v3 init"
+    "api:init": "swagger2api-v3 init",
+    "api:validate": "swagger2api-v3 validate"
   }
 }
 ```
 
-## 🎨 代码格式化
+## 🎨 Code Formatting
 
-支持在生成完成后自动执行格式化命令：
+Support automatic execution of formatting commands after generation:
 
 ```javascript
-// 配置文件中
+// In configuration file
 const config = {
-  // ... 其他配置
-  lint: 'prettier --write'  // 或 'eslint --fix' 等
+  // ... other configurations
+  lint: 'prettier --write'  // or 'eslint --fix', etc.
 };
 ```
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
-## 📄 许可证
+## 📄 License
 
 MIT License
