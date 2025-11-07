@@ -75,11 +75,12 @@ npx swagger2api-v3 generate
 |--------|------|---------|-------------|
 | `input` | string | - | Swagger JSON file path or URL |
 | `output` | string | `'./src/api'` | Output directory for generated code |
-| `generator` | string | `'typescript'` | Code generator type |
+| `generator` | string | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation |
 | `groupByTags` | boolean | `true` | Whether to group files by tags |
 | `overwrite` | boolean | `true` | Whether to overwrite existing files |
 | `prefix` | string | `''` | Common prefix for API paths |
 | `importTemplate` | string | - | Import statement template for request function |
+| `requestStyle` | 'method' \| 'generic' | `'generic'` | Request call style: `method` uses `request.get/post`, `generic` uses `request({ method })` |
 | `lint` | string | - | Code formatting command (optional) |
 | `options.addComments` | boolean | `true` | Whether to add detailed comments |
 
@@ -89,12 +90,36 @@ npx swagger2api-v3 generate
 
 ```
 src/api/
-├── types.ts           # Data type definitions
+├── types.ts           # Data type definitions (TypeScript mode only)
 ├── user/              # User-related APIs
 │   └── index.ts
 ├── auth/              # Auth-related APIs
 │   └── index.ts
 └── index.ts          # Entry file
+```
+
+### JavaScript Output
+
+When `generator: 'javascript'` is set:
+
+- Outputs `.js` files (`index.js`, `api.js`, `user/index.js`, etc.)
+- Does not generate a `types.ts` file
+- Removes TypeScript-specific syntax (types, `import type`, generics like `<T>`)
+
+Example generated API function (method style):
+
+```javascript
+export const codeAuth = (data, config) => {
+  return request.post({ url: '/api/auth/codeAuth', data, ...config });
+};
+```
+
+Example generated API function (generic style):
+
+```javascript
+export const codeAuth = (data, config) => {
+  return request({ url: '/api/auth/codeAuth', method: 'POST', data, ...config });
+};
 ```
 
 ### Not Grouped
@@ -143,6 +168,16 @@ export const authControllerLoginPost = (data: LoginDto, config?: any) => {
   return request.post<LoginRespDto>({
     url: '/admin/auth/login',
     data,
+    ...config
+  });
+};
+
+// When requestStyle is set to 'generic':
+export const authControllerLoginPost2 = (data: LoginDto, config?: any) => {
+  return request<LoginRespDto>({
+    url: '/admin/auth/login',
+    data,
+    method: 'POST',
     ...config
   });
 };

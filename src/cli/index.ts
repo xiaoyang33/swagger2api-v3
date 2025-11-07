@@ -102,7 +102,10 @@ const config = {
   importTemplate: "import { request } from '@/utils/request';",
   
   // 生成器类型
-  generator: 'typescript',
+  generator: 'typescript', // 可选 'javascript'（JS 模式输出 .js 文件且不生成类型文件）
+  
+  // 请求调用风格：'method' 使用 request.get/post；'generic' 使用 request({ method })
+  requestStyle: 'generic',
   
   // 按标签分组生成文件
   groupByTags: true,

@@ -42,8 +42,11 @@ export class CodeGenerator {
     // 确保输出目录存在
     ensureDirectoryExists(this.config.output);
 
-    // 生成类型文件
-    if (this.config.options?.generateModels !== false) {
+    // 生成类型文件（仅在 TypeScript 模式下生成）
+    if (
+      this.config.generator === 'typescript' &&
+      this.config.options?.generateModels !== false
+    ) {
       await this.generateTypesFile(types);
     }
 
@@ -86,7 +89,7 @@ export class CodeGenerator {
     const header = [
       '/**',
       ' * API 类型定义',
-      ' * 此文件由 swagger2api 自动生成，请勿手动修改',
+      ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
       ' */',
       ''
     ].join('\n');
@@ -132,7 +135,8 @@ export class CodeGenerator {
       // 确保tag文件夹存在
       ensureDirectoryExists(tagFolderPath);
 
-      const filePath = path.join(tagFolderPath, 'index.ts');
+      const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
+      const filePath = path.join(tagFolderPath, `index.${ext}`);
       const content = this.generateApiFileContent(apis, types, tag);
 
       writeFile(filePath, content);
@@ -148,7 +152,8 @@ export class CodeGenerator {
     apis: ApiInfo[],
     types: TypeInfo[]
   ): Promise<void> {
-    const filePath = path.join(this.config.output, 'api.ts');
+    const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
+    const filePath = path.join(this.config.output, `api.${ext}`);
     const content = this.generateApiFileContent(apis, types);
 
     writeFile(filePath, content);
@@ -172,7 +177,7 @@ export class CodeGenerator {
     const header = [
       '/**',
       ` * ${tag ? `${tag} ` : ''}API 接口`,
-      ' * 此文件由 swagger2api 自动生成，请勿手动修改',
+      ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
       ' */',
       '',
       importTemplate + ';'
@@ -181,8 +186,12 @@ export class CodeGenerator {
     // 收集当前文件实际使用的类型
     const usedTypes = this.collectUsedTypes(apis);
 
-    // 添加类型导入
-    if (usedTypes.length > 0) {
+    // 添加类型导入（仅在 TypeScript 且生成类型文件时）
+    if (
+      this.config.generator === 'typescript' &&
+      this.config.options?.generateModels !== false &&
+      usedTypes.length > 0
+    ) {
       const typeNames = usedTypes.join(', ');
       const typesPath = tag ? '../types' : './types';
       header.push(`import type { ${typeNames} } from '${typesPath}';`);
@@ -231,17 +240,33 @@ export class CodeGenerator {
     }));
 
     // 生成直接参数形式
-    const functionParams = this.generateDirectParameters(swaggerParameters);
+    const functionParams = this.generateDirectParameters(
+      swaggerParameters,
+      this.config.generator === 'javascript'
+    );
     const responseType = api.responseType || 'any';
     const functionName = toCamelCase(api.name);
 
     parts.push(`export const ${functionName} = (${functionParams}) => {`);
 
     // 生成请求配置
-    const requestConfig = this.generateRequestConfig(api);
-    parts.push(
-      `  return request.${api.method.toLowerCase()}<${responseType}>(${requestConfig});`
-    );
+    const useGenericRequest = this.config.requestStyle === 'generic';
+    const requestConfig = this.generateRequestConfig(api, useGenericRequest);
+    const isJS = this.config.generator === 'javascript';
+    if (useGenericRequest) {
+      parts.push(
+        isJS
+          ? `  return request(${requestConfig});`
+          : `  return request<${responseType}>(${requestConfig});`
+      );
+    } else {
+      const method = api.method.toLowerCase();
+      parts.push(
+        isJS
+          ? `  return request.${method}(${requestConfig});`
+          : `  return request.${method}<${responseType}>(${requestConfig});`
+      );
+    }
     parts.push('}');
 
     return parts.join('\n');
@@ -252,7 +277,10 @@ export class CodeGenerator {
    * @param parameters Swagger参数数组
    * @returns 函数参数字符串
    */
-  private generateDirectParameters(parameters: any[]): string {
+  private generateDirectParameters(
+    parameters: any[],
+    isJavaScript: boolean = false
+  ): string {
     const params: string[] = [];
 
     const queryParams = parameters.filter((p) => p.in === 'query');
@@ -263,42 +291,54 @@ export class CodeGenerator {
     // 合并路径参数和查询参数为一个params对象
     const allParams = [...pathParams, ...queryParams];
     if (allParams.length > 0) {
-      const paramType = allParams
-        .map((p) => {
-          const optional = p.required ? '' : '?';
-          return `${p.name}${optional}: ${p.type}`;
-        })
-        .join(', ');
+      if (isJavaScript) {
+        params.push('params');
+      } else {
+        const paramType = allParams
+          .map((p) => {
+            const optional = p.required ? '' : '?';
+            return `${p.name}${optional}: ${p.type}`;
+          })
+          .join(', ');
 
-      // 检查是否所有参数都是可选的
-      const allOptional = allParams.every((p) => !p.required);
-      const optionalModifier = allOptional ? '?' : '';
+        // 检查是否所有参数都是可选的
+        const allOptional = allParams.every((p) => !p.required);
+        const optionalModifier = allOptional ? '?' : '';
 
-      params.push(`params${optionalModifier}: { ${paramType} }`);
+        params.push(`params${optionalModifier}: { ${paramType} }`);
+      }
     }
 
     // 请求体参数
     if (bodyParams.length > 0) {
-      const bodyParam = bodyParams[0];
-      const bodyType = bodyParam.schema
-        ? this.getTypeFromSchema(bodyParam.schema)
-        : bodyParam.type;
-      params.push(`data: ${bodyType}`);
+      if (isJavaScript) {
+        params.push('data');
+      } else {
+        const bodyParam = bodyParams[0];
+        const bodyType = bodyParam.schema
+          ? this.getTypeFromSchema(bodyParam.schema)
+          : bodyParam.type;
+        params.push(`data: ${bodyType}`);
+      }
     }
 
     // 表单参数
     if (formParams.length > 0) {
-      const formType = formParams
-        .map((p) => {
-          const optional = p.required ? '' : '?';
-          return `${p.name}${optional}: ${p.type}`;
-        })
-        .join(', ');
-      params.push(`data: { ${formType} }`);
+      if (isJavaScript) {
+        params.push('data');
+      } else {
+        const formType = formParams
+          .map((p) => {
+            const optional = p.required ? '' : '?';
+            return `${p.name}${optional}: ${p.type}`;
+          })
+          .join(', ');
+        params.push(`data: { ${formType} }`);
+      }
     }
 
     // 添加可选的config参数
-    params.push('config?: any');
+    params.push(isJavaScript ? 'config' : 'config?: any');
 
     return params.join(', ');
   }
@@ -422,7 +462,7 @@ export class CodeGenerator {
    * @param api API接口信息
    * @returns 请求配置代码
    */
-  private generateRequestConfig(api: ApiInfo): string {
+  private generateRequestConfig(api: ApiInfo, includeMethod: boolean = false): string {
     const config: string[] = [];
 
     // URL处理
@@ -462,6 +502,11 @@ export class CodeGenerator {
       config.push('data');
     }
 
+    // 在通用请求风格下添加 method 字段
+    if (includeMethod) {
+      config.push(`method: '${api.method}'`);
+    }
+
     // 添加config参数合并
     config.push('...config');
 
@@ -477,8 +522,13 @@ export class CodeGenerator {
   ): Promise<void> {
     const exports: string[] = [];
 
-    // 导出类型
-    exports.push("export * from './types';");
+    // 导出类型（仅在 TypeScript 且生成类型文件时）
+    if (
+      this.config.generator === 'typescript' &&
+      this.config.options?.generateModels !== false
+    ) {
+      exports.push("export * from './types';");
+    }
 
     if (this.config.groupByTags) {
       // 按标签导出
@@ -494,14 +544,15 @@ export class CodeGenerator {
     const content = [
       '/**',
       ' * API 入口文件',
-      ' * 此文件由 swagger2api 自动生成，请勿手动修改',
+      ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
       ' */',
       '',
       ...exports,
       ''
     ].join('\n');
 
-    const filePath = path.join(this.config.output, 'index.ts');
+    const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
+    const filePath = path.join(this.config.output, `index.${ext}`);
     writeFile(filePath, content);
   }
 

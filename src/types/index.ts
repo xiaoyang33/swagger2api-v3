@@ -11,13 +11,15 @@ export interface SwaggerConfig {
   /** 输出目录 */
   output: string;
   /** 生成器类型 */
-  generator: 'typescript';
+  generator: 'typescript' | 'javascript';
   /** 按 tags 分组生成文件 */
   groupByTags: boolean;
   /** 是否覆盖更新，默认为true。为true时会先删除输出目录下的所有文件 */
   overwrite?: boolean;
   /** 接口路径公共前缀，默认为空字符串 */
   prefix?: string;
+  /** 请求调用风格：'method' 使用 request.get/post；'generic' 使用 request({ method }) */
+  requestStyle?: 'method' | 'generic';
   /** 标签分组配置 */
   tagGrouping?: TagGroupingConfig;
   /** 生成选项 */

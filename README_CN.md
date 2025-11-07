@@ -75,11 +75,12 @@ npx swagger2api-v3 generate
 |------|------|--------|------|
 | `input` | string | - | Swagger JSON 文件路径或 URL |
 | `output` | string | `'./src/api'` | 生成代码的输出目录 |
-| `generator` | string | `'typescript'` | 代码生成器类型 |
+| `generator` | string | `'typescript'` | 代码生成器类型，支持 `'typescript'` 和 `'javascript'`。设置 `'javascript'` 时输出 `.js` 文件，并且不生成类型文件 |
 | `groupByTags` | boolean | `true` | 是否按标签分组生成文件 |
 | `overwrite` | boolean | `true` | 是否覆盖已存在的文件 |
 | `prefix` | string | `''` | 接口路径公共前缀 |
 | `importTemplate` | string | - | request 函数导入语句模板 |
+| `requestStyle` | 'method' \| 'generic' | `'generic'` | 请求调用风格：`method` 使用 `request.get/post`，`generic` 使用 `request({ method })` |
 | `lint` | string | - | 代码格式化命令（可选） |
 | `options.addComments` | boolean | `true` | 是否添加详细注释 |
 
@@ -89,12 +90,36 @@ npx swagger2api-v3 generate
 
 ```
 src/api/
-├── types.ts           # 数据类型定义
+├── types.ts           # 数据类型定义（仅在 TypeScript 模式）
 ├── user/              # User 相关接口
 │   └── index.ts
 ├── auth/              # Auth 相关接口
 │   └── index.ts
 └── index.ts          # 入口文件
+```
+
+### JavaScript 输出
+
+当设置 `generator: 'javascript'` 时：
+
+- 输出 `.js` 文件（如 `index.js`、`api.js`、`user/index.js` 等）
+- 不生成 `types.ts` 类型文件
+- 移除 TypeScript 语法（类型标注、`import type`、泛型 `<T>`）
+
+示例（方法风格）：
+
+```javascript
+export const codeAuth = (data, config) => {
+  return request.post({ url: '/api/auth/codeAuth', data, ...config });
+};
+```
+
+示例（通用风格）：
+
+```javascript
+export const codeAuth = (data, config) => {
+  return request({ url: '/api/auth/codeAuth', method: 'POST', data, ...config });
+};
 ```
 
 ### 不分组
@@ -143,6 +168,16 @@ export const authControllerLoginPost = (data: LoginDto, config?: any) => {
   return request.post<LoginRespDto>({
     url: '/admin/auth/login',
     data,
+    ...config
+  });
+};
+
+// 当设置 requestStyle 为 'generic' 时：
+export const authControllerLoginPost2 = (data: LoginDto, config?: any) => {
+  return request<LoginRespDto>({
+    url: '/admin/auth/login',
+    data,
+    method: 'POST',
     ...config
   });
 };

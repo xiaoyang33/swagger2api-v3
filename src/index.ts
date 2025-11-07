@@ -11,7 +11,12 @@ export class Swagger2API {
   private config: SwaggerConfig;
 
   constructor(config: SwaggerConfig) {
-    this.config = config;
+    // 规范化配置：设置默认值
+    this.config = {
+      ...config,
+      // 默认请求风格为 generic
+      requestStyle: config.requestStyle ?? 'generic'
+    };
   }
 
   /**
@@ -70,8 +75,12 @@ export class Swagger2API {
       errors.push('output 配置项不能为空');
     }
 
-    if (this.config.generator !== 'typescript') {
-      errors.push('目前只支持 typescript 生成器');
+    // 支持 typescript 与 javascript 两种生成器
+    if (
+      this.config.generator !== 'typescript' &&
+      this.config.generator !== 'javascript'
+    ) {
+      errors.push('目前只支持 typescript 或 javascript 生成器');
     }
 
     if (errors.length > 0) {
