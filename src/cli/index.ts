@@ -119,6 +119,11 @@ const config = {
   // 代码格式化命令（可选）
   lint: 'prettier --write',
   
+  // 生成方法名时需要忽略的前缀（可选）
+  // 例如：配置 ['api', 'auth'] 后，apiGetName 会变成 getName，authUserInfo 会变成 userInfo
+  // 如果方法名是 apiAuthGetName，会依次移除所有匹配的前缀，最终变成 getName
+  methodNameIgnorePrefix: [],
+  
   // 生成选项
   options: {
     // 是否添加注释

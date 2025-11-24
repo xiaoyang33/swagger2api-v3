@@ -82,6 +82,7 @@ npx swagger2api-v3 generate
 | `importTemplate` | string | - | Import statement template for request function |
 | `requestStyle` | 'method' \| 'generic' | `'generic'` | Request call style: `method` uses `request.get/post`, `generic` uses `request({ method })` |
 | `lint` | string | - | Code formatting command (optional) |
+| `methodNameIgnorePrefix` | string[] | `[]` | Array of prefixes to ignore when generating method names. For example, `['api', 'auth']` will transform `apiGetName` to `getName` and `authUserInfo` to `userInfo` |
 | `options.addComments` | boolean | `true` | Whether to add detailed comments |
 
 ## 📁 Generated File Structure

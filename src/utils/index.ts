@@ -73,6 +73,55 @@ export function toCamelCase(str: string): string {
 }
 
 /**
+ * 从方法名中移除指定的前缀
+ * @param methodName 方法名
+ * @param prefixes 需要移除的前缀数组
+ * @returns 移除前缀后的方法名
+ */
+export function stripMethodNamePrefixes(
+  methodName: string,
+  prefixes?: string[]
+): string {
+  if (!prefixes || prefixes.length === 0) {
+    return methodName;
+  }
+
+  let result = methodName;
+
+  // 循环移除所有匹配的前缀，直到没有前缀可以移除
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prefix of prefixes) {
+      if (!prefix) continue;
+
+      // 将前缀转换为小驼峰格式进行匹配
+      const camelPrefix = toCamelCase(prefix);
+      
+      // 检查方法名是否以该前缀开头（不区分大小写）
+      const lowerMethodName = result.toLowerCase();
+      const lowerPrefix = camelPrefix.toLowerCase();
+
+      if (lowerMethodName.startsWith(lowerPrefix)) {
+        // 移除前缀，保持后续字符的大小写
+        const remaining = result.substring(camelPrefix.length);
+        
+        // 如果移除前缀后还有内容，则更新结果
+        if (remaining.length > 0) {
+          // 确保首字母小写
+          result = remaining.charAt(0).toLowerCase() + remaining.slice(1);
+          changed = true;
+          break; // 重新开始检查
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+
+/**
  * 将Swagger类型转换为TypeScript类型
  * @param schema Swagger模式
  * @returns TypeScript类型字符串

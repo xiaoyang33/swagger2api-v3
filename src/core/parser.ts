@@ -11,7 +11,8 @@ import {
   swaggerTypeToTsType,
   generateParameterTypes,
   getResponseType,
-  toPascalCase
+  toPascalCase,
+  stripMethodNamePrefixes
 } from '../utils';
 
 /**
@@ -113,6 +114,12 @@ export class SwaggerParser {
         method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
       functionName = functionName + methodSuffix;
     }
+
+    // 应用前缀忽略规则
+    functionName = stripMethodNamePrefixes(
+      functionName,
+      this.config.methodNameIgnorePrefix
+    );
 
     // 获取响应类型
     const responseType = getResponseType(operation.responses);

@@ -82,6 +82,7 @@ npx swagger2api-v3 generate
 | `importTemplate` | string | - | request 函数导入语句模板 |
 | `requestStyle` | 'method' \| 'generic' | `'generic'` | 请求调用风格：`method` 使用 `request.get/post`，`generic` 使用 `request({ method })` |
 | `lint` | string | - | 代码格式化命令（可选） |
+| `methodNameIgnorePrefix` | string[] | `[]` | 生成方法名时需要忽略的前缀数组。例如，配置 `['api', 'auth']` 后，`apiGetName` 会变成 `getName`，`authUserInfo` 会变成 `userInfo` |
 | `options.addComments` | boolean | `true` | 是否添加详细注释 |
 
 ## 📁 生成的文件结构

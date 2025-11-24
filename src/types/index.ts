@@ -30,6 +30,8 @@ export interface SwaggerConfig {
   importTemplate?: string;
   /** 格式化代码命令 */
   lint?: string;
+  /** 生成方法名时需要忽略的前缀数组，如 ['api', 'auth'] */
+  methodNameIgnorePrefix?: string[];
 }
 
 /**
