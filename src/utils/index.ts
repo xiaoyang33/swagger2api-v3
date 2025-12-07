@@ -97,7 +97,7 @@ export function stripMethodNamePrefixes(
 
       // 将前缀转换为小驼峰格式进行匹配
       const camelPrefix = toCamelCase(prefix);
-      
+
       // 检查方法名是否以该前缀开头（不区分大小写）
       const lowerMethodName = result.toLowerCase();
       const lowerPrefix = camelPrefix.toLowerCase();
@@ -105,7 +105,7 @@ export function stripMethodNamePrefixes(
       if (lowerMethodName.startsWith(lowerPrefix)) {
         // 移除前缀，保持后续字符的大小写
         const remaining = result.substring(camelPrefix.length);
-        
+
         // 如果移除前缀后还有内容，则更新结果
         if (remaining.length > 0) {
           // 确保首字母小写
@@ -119,7 +119,6 @@ export function stripMethodNamePrefixes(
 
   return result;
 }
-
 
 /**
  * 将Swagger类型转换为TypeScript类型
@@ -331,9 +330,17 @@ export async function loadSwaggerDocument(
 ): Promise<SwaggerDocument> {
   try {
     if (input.startsWith('http://') || input.startsWith('https://')) {
-      // 从URL加载
-      const response = await axios.get(input);
-      return response.data;
+      const { data } = await axios.get(input);
+      console.log('Loaded from URL:', input);
+      if (data.components?.schemas) {
+        console.log(
+          'Schemas count:',
+          Object.keys(data.components.schemas).length
+        );
+      } else {
+        console.log('No schemas in loaded data');
+      }
+      return data;
     } else {
       // 从文件加载
       const content = fs.readFileSync(input, 'utf-8');
@@ -381,30 +388,30 @@ export function generateApiComment(
     const pathParams = parameters.filter((p) => p.in === 'path');
     const bodyParams = parameters.filter((p) => p.in === 'body');
     const formParams = parameters.filter((p) => p.in === 'formData');
-    
+
     const hasParams = queryParams.length > 0 || pathParams.length > 0;
     const hasData = bodyParams.length > 0 || formParams.length > 0;
-    
+
     if (hasParams || hasData) {
       comments.push(' *');
-      
+
       // 如果有查询参数或路径参数，添加params注释
       if (hasParams) {
         const paramDescriptions = [...pathParams, ...queryParams]
-          .map(p => p.description || '')
-          .filter(desc => desc)
+          .map((p) => p.description || '')
+          .filter((desc) => desc)
           .join(', ');
         const description = paramDescriptions || '请求参数';
         comments.push(` * @param params ${description}`);
       }
-      
+
       // 如果有请求体参数，添加data注释
       if (hasData) {
         const dataParam = bodyParams[0] || formParams[0];
         const description = dataParam?.description || '请求数据';
         comments.push(` * @param data ${description}`);
       }
-      
+
       // 添加config参数注释
       comments.push(` * @param config 可选的请求配置`);
     }
@@ -434,6 +441,10 @@ export function sanitizeFilename(filename: string): string {
  * @returns TypeScript类型字符串
  */
 export function getResponseType(responses: any): string {
+  if (!responses) {
+    return 'any';
+  }
+
   // 优先获取200响应
   const successResponse =
     responses['200'] || responses['201'] || responses['default'];

@@ -184,7 +184,7 @@ export class CodeGenerator {
     ];
 
     // 收集当前文件实际使用的类型
-    const usedTypes = this.collectUsedTypes(apis);
+    const usedTypes = this.collectUsedTypes(apis, types); // 传入 types
 
     // 添加类型导入（仅在 TypeScript 且生成类型文件时）
     if (
@@ -358,9 +358,13 @@ export class CodeGenerator {
   /**
    * 收集API数组中实际使用的类型
    * @param apis API接口数组
+   * @param definedTypes 已定义的类型数组
    * @returns 使用的类型名称数组
    */
-  private collectUsedTypes(apis: ApiInfo[]): string[] {
+  private collectUsedTypes(
+    apis: ApiInfo[],
+    definedTypes?: TypeInfo[]
+  ): string[] {
     const usedTypes = new Set<string>();
 
     apis.forEach((api) => {
@@ -386,6 +390,14 @@ export class CodeGenerator {
         }
       });
     });
+
+    // 如果提供了 definedTypes，则只保留已定义的类型
+    if (definedTypes) {
+      const definedTypeNames = new Set(definedTypes.map((t) => t.name));
+      return Array.from(usedTypes)
+        .filter((name) => definedTypeNames.has(name))
+        .sort();
+    }
 
     return Array.from(usedTypes).sort();
   }
@@ -462,7 +474,10 @@ export class CodeGenerator {
    * @param api API接口信息
    * @returns 请求配置代码
    */
-  private generateRequestConfig(api: ApiInfo, includeMethod: boolean = false): string {
+  private generateRequestConfig(
+    api: ApiInfo,
+    includeMethod: boolean = false
+  ): string {
     const config: string[] = [];
 
     // URL处理

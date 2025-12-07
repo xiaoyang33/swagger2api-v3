@@ -163,6 +163,17 @@ export class SwaggerParser {
    */
   parseTypes(): TypeInfo[] {
     const types: TypeInfo[] = [];
+    
+    // Debug log
+    console.log('解析类型定义...');
+    console.log('Has definitions:', !!this.document.definitions);
+    console.log('Has components:', !!this.document.components);
+    if (this.document.components) {
+        console.log('Has schemas:', !!this.document.components.schemas);
+        if (this.document.components.schemas) {
+            console.log('Schema keys:', Object.keys(this.document.components.schemas));
+        }
+    }
 
     // 解析 Swagger 2.0 definitions
     if (this.document.definitions) {
