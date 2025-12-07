@@ -121,28 +121,52 @@ export function stripMethodNamePrefixes(
 }
 
 /**
- * 将Swagger类型转换为TypeScript类型
- * @param schema Swagger模式
- * @returns TypeScript类型字符串
+ * 从函数名中移除 HTTP method 后缀
+ * @param functionName 函数名
+ * @param method HTTP 方法
+ * @returns 移除后缀后的函数名
  */
-export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
-  if (!schema) {
-    return 'any';
+export function removeMethodSuffix(
+  functionName: string,
+  method: string
+): string {
+  const methodSuffix =
+    method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+
+  if (functionName.endsWith(methodSuffix)) {
+    return functionName.slice(0, -methodSuffix.length);
   }
 
-  let baseType: string;
+  return functionName;
+}
 
-  // 处理 allOf 类型组合
-  if (schema.allOf && schema.allOf.length > 0) {
-    // 检查是否为泛型模式：第一个是引用类型，第二个定义了扩展属性
-    const firstSchema = schema.allOf[0];
-    if (firstSchema.$ref && schema.allOf.length > 1) {
-      const refName = firstSchema.$ref.split('/').pop();
-      const secondSchema = schema.allOf[1];
 
-      // 检查第二个 schema 是否定义了对象属性（可能没有 type 字段）
+/**
+ * 将Swagger类型转换为TypeScript类型
+ * @param schema Swagger模式
+ * @param schemas 可选的 schemas 上下文,用于查找被引用的类型定义
+ * @returns TypeScript类型字符串
+ */
+export function swaggerTypeToTsType(schema: any, schemas?: any): string {
+  if (!schema) return 'any';
+
+  let baseType = 'any';
+
+  // 处理 allOf (通常用于继承或泛型)
+  if (schema.allOf) {
+    // 简单处理：如果是引用 + 对象定义，可能是泛型包装
+    const refSchema = schema.allOf.find((s: any) => s.$ref);
+    const secondSchema = schema.allOf.find((s: any) => !s.$ref);
+
+    if (refSchema && secondSchema) {
+      const refName = refSchema.$ref.split('/').pop();
+      const sanitizedRefName = sanitizeTypeName(refName || '');
+
+      // 检查是否是泛型容器 (如 ResOp)
+      // 注意：secondSchema 可能没有显式声明 type: 'object'，但如果有 properties，则视为对象
       if (secondSchema.properties) {
-        // 获取所有扩展属性的类型
+        // 尝试提取泛型参数类型
+        // 这里假设泛型参数是 properties 中的第一个属性
         const propertyTypes: string[] = [];
 
         for (const [propName, propSchema] of Object.entries(
@@ -154,36 +178,64 @@ export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
 
         // 如果只有一个属性，直接作为泛型参数
         if (propertyTypes.length === 1) {
-          baseType = `${refName}<${propertyTypes[0]}>`;
+          baseType = `${sanitizedRefName}<${propertyTypes[0]}>`;
         }
         // 如果有多个属性，组合成联合类型或对象类型
         else if (propertyTypes.length > 1) {
           const combinedType = `{ ${Object.entries(secondSchema.properties)
-            .map(([key, value]) => {
+            .map(([key, value]: [string, any]) => {
               const optional = secondSchema.required?.includes(key) ? '' : '?';
               const type = swaggerTypeToTsType(value as any);
               return `${key}${optional}: ${type}`;
             })
             .join('; ')} }`;
-          baseType = `${refName}<${combinedType}>`;
+          baseType = `${sanitizedRefName}<${combinedType}>`;
         } else {
-          baseType = refName || 'any';
+          baseType = sanitizedRefName || 'any';
         }
       } else {
-        baseType = refName || 'any';
+        baseType = sanitizedRefName || 'any';
       }
     } else {
       // 如果不是引用，尝试合并所有类型
       const types = schema.allOf
-        .map((s) => swaggerTypeToTsType(s))
-        .filter((t) => t !== 'any');
+        .map((s: any) => swaggerTypeToTsType(s))
+        .filter((t: string) => t !== 'any');
       baseType = types.length > 0 ? types[0] : 'any';
+    }
+  }
+  // 处理 anyOf 或 oneOf
+  else if (schema.anyOf || schema.oneOf) {
+    const types = (schema.anyOf || schema.oneOf)
+      .map((s: any) => {
+        // 特殊处理 type: 'null'
+        if (s.type === 'null') return 'null';
+        return swaggerTypeToTsType(s);
+      })
+      .filter((t: string) => t !== 'any');
+
+    // 去重
+    const uniqueTypes = Array.from(new Set(types));
+
+    if (uniqueTypes.length > 0) {
+      baseType = uniqueTypes.join(' | ');
+    } else {
+      baseType = 'any';
     }
   }
   // 处理引用类型
   else if (schema.$ref) {
     const refName = schema.$ref.split('/').pop();
-    baseType = refName || 'any';
+    baseType = sanitizeTypeName(refName || 'any');
+    
+    // 如果提供了 schemas 上下文,检查被引用的 schema 是否是数组类型
+    if (schemas && refName) {
+      const referencedSchema = schemas[refName];
+      if (referencedSchema && referencedSchema.type === 'array') {
+        // 被引用的 schema 是数组类型,添加 []
+        baseType = `${baseType}[]`;
+      }
+    }
   }
   // 处理数组类型
   else if (schema.type === 'array') {
@@ -194,7 +246,7 @@ export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
   else if (schema.type === 'object') {
     if (schema.properties) {
       const properties = Object.entries(schema.properties)
-        .map(([key, value]) => {
+        .map(([key, value]: [string, any]) => {
           const optional = schema.required?.includes(key) ? '' : '?';
           const type = swaggerTypeToTsType(value);
           return `  ${key}${optional}: ${type};`;
@@ -214,7 +266,7 @@ export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
         break;
       case 'string':
         if (schema.enum) {
-          baseType = schema.enum.map((value) => `'${value}'`).join(' | ');
+          baseType = schema.enum.map((value: any) => `'${value}'`).join(' | ');
         } else {
           baseType = 'string';
         }
@@ -224,6 +276,9 @@ export function swaggerTypeToTsType(schema?: SwaggerSchema): string {
         break;
       case 'file':
         baseType = 'File';
+        break;
+      case 'null': // Add this
+        baseType = 'null';
         break;
       default:
         baseType = 'any';
@@ -470,4 +525,13 @@ export function getResponseType(responses: any): string {
   }
 
   return 'any';
+}
+
+export function sanitizeTypeName(name: string): string {
+  if (!name) return name;
+  // 1. 替换非法字符（包括点号）为下划线
+  const replaced = name.replace(/[^a-zA-Z0-9_]/g, '_');
+  // 2. 转换为 PascalCase
+  // 使用现有的 toPascalCase，它能处理下划线
+  return toPascalCase(replaced);
 }

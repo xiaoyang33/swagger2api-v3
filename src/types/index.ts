@@ -32,6 +32,8 @@ export interface SwaggerConfig {
   lint?: string;
   /** 生成方法名时需要忽略的前缀数组，如 ['api', 'auth'] */
   methodNameIgnorePrefix?: string[];
+  /** 是否在生成的方法名中添加 HTTP method 后缀，默认为 true。true: userListPost, false: userList */
+  addMethodSuffix?: boolean;
 }
 
 /**

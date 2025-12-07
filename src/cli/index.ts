@@ -124,6 +124,11 @@ const config = {
   // 如果方法名是 apiAuthGetName，会依次移除所有匹配的前缀，最终变成 getName
   methodNameIgnorePrefix: [],
   
+  // 是否在生成的方法名中添加 HTTP method 后缀，默认为 true
+  // true: userListPost, userDetailGet
+  // false: userList, userDetail
+  addMethodSuffix: true,
+  
   // 生成选项
   options: {
     // 是否添加注释

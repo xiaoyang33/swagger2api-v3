@@ -12,8 +12,11 @@ import {
   generateParameterTypes,
   getResponseType,
   toPascalCase,
-  stripMethodNamePrefixes
+  stripMethodNamePrefixes,
+  sanitizeTypeName,
+  removeMethodSuffix
 } from '../utils';
+
 
 /**
  * Swagger文档解析器
@@ -25,6 +28,17 @@ export class SwaggerParser {
   constructor(document: SwaggerDocument, config: SwaggerConfig) {
     this.document = document;
     this.config = config;
+  }
+
+  /**
+   * 获取所有 schemas (包括 definitions 和 components.schemas)
+   * @returns schemas 对象
+   */
+  private getAllSchemas(): any {
+    return {
+      ...(this.document.definitions || {}),
+      ...(this.document.components?.schemas || {})
+    };
   }
 
   /**
@@ -107,12 +121,22 @@ export class SwaggerParser {
     let functionName =
       operation.operationId || pathToFunctionName(method, path);
 
-    // 如果使用了operationId，需要手动添加HTTP方法后缀
+    // 根据配置决定是否添加/保留 HTTP method 后缀
+    const shouldAddMethodSuffix = this.config.addMethodSuffix !== false; // 默认为 true
+
     if (operation.operationId) {
-      // 将HTTP方法转换为首字母大写的形式并添加到末尾
-      const methodSuffix =
-        method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
-      functionName = functionName + methodSuffix;
+      // 如果使用了 operationId，根据配置决定是否添加 HTTP 方法后缀
+      if (shouldAddMethodSuffix) {
+        const methodSuffix =
+          method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+        functionName = functionName + methodSuffix;
+      }
+    } else {
+      // 如果没有 operationId，pathToFunctionName 已经包含了 method 后缀
+      // 如果配置为 false，需要移除后缀
+      if (!shouldAddMethodSuffix) {
+        functionName = removeMethodSuffix(functionName, method);
+      }
     }
 
     // 应用前缀忽略规则
@@ -120,6 +144,7 @@ export class SwaggerParser {
       functionName,
       this.config.methodNameIgnorePrefix
     );
+
 
     // 获取响应类型
     const responseType = getResponseType(operation.responses);
@@ -178,7 +203,8 @@ export class SwaggerParser {
     // 解析 Swagger 2.0 definitions
     if (this.document.definitions) {
       for (const [name, schema] of Object.entries(this.document.definitions)) {
-        const typeInfo = this.parseTypeDefinition(name, schema);
+        const sanitizedName = sanitizeTypeName(name); // Use it
+        const typeInfo = this.parseTypeDefinition(sanitizedName, schema);
         types.push(typeInfo);
       }
     }
@@ -188,7 +214,8 @@ export class SwaggerParser {
       for (const [name, schema] of Object.entries(
         this.document.components.schemas
       )) {
-        const typeInfo = this.parseTypeDefinition(name, schema);
+        const sanitizedName = sanitizeTypeName(name); // Use it
+        const typeInfo = this.parseTypeDefinition(sanitizedName, schema);
         types.push(typeInfo);
       }
     }
@@ -205,13 +232,16 @@ export class SwaggerParser {
   private parseTypeDefinition(name: string, schema: any): TypeInfo {
     const typeName = toPascalCase(name);
     let definition: string;
+    
+    // 获取所有 schemas 用于类型解析
+    const allSchemas = this.getAllSchemas();
 
     if (schema.type === 'object' && schema.properties) {
       // 对象类型
       const properties = Object.entries(schema.properties)
         .map(([key, value]: [string, any]) => {
           const optional = schema.required?.includes(key) ? '' : '?';
-          const type = swaggerTypeToTsType(value);
+          const type = swaggerTypeToTsType(value, allSchemas);
           const comment = value.description
             ? ` /** ${value.description} */`
             : '';
@@ -221,9 +251,10 @@ export class SwaggerParser {
 
       definition = `export interface ${typeName} {\n${properties}\n}`;
     } else if (schema.type === 'array') {
-      // 数组类型
-      const itemType = swaggerTypeToTsType(schema.items);
-      definition = `export type ${typeName} = ${itemType}[];`;
+      // 数组类型 - 生成指向 items 类型的别名(不带 [])
+      // 在引用时会自动添加 []
+      const itemType = swaggerTypeToTsType(schema.items, allSchemas);
+      definition = `export type ${typeName} = ${itemType};`;
     } else if (schema.enum) {
       // 枚举类型
       const enumValues = schema.enum

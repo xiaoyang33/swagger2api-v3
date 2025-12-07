@@ -6,6 +6,7 @@ import {
   toPascalCase,
   toCamelCase,
   sanitizeFilename,
+  sanitizeTypeName, // Add import
   swaggerTypeToTsType,
   getResponseType,
   generateParameterTypes,
@@ -37,6 +38,18 @@ describe('utils', () => {
     expect(sanitizeFilename('a<b>c|d?e*')).toBe('a-b-c-d-e-');
   });
 
+  test('sanitizeTypeName handles dots correctly', () => {
+    // 假设导出了 sanitizeTypeName，如果没有导出，我需要在 utils/index.ts 导出它，或者在测试文件中导入
+    // 上面的 import 列表没有 sanitizeTypeName，需要添加
+    expect(sanitizeTypeName('System.Menu.ListResp')).toBe('SystemMenuListResp');
+    expect(sanitizeTypeName('some.other-Type')).toBe('SomeOtherType');
+  });
+
+  test('swaggerTypeToTsType handles refs with dots', () => {
+     const schema = { $ref: '#/components/schemas/System.Menu.ListResp' } as any;
+     expect(swaggerTypeToTsType(schema)).toBe('SystemMenuListResp');
+  });
+
   test('swaggerTypeToTsType basic types and arrays', () => {
     expect(swaggerTypeToTsType({ type: 'string' })).toBe('string');
     expect(swaggerTypeToTsType({ type: 'integer' })).toBe('number');
@@ -57,6 +70,26 @@ describe('utils', () => {
       ]
     } as any;
     expect(swaggerTypeToTsType(schema)).toBe('ResOp<UserListRespDto>');
+  });
+
+  test('swaggerTypeToTsType handles anyOf with null', () => {
+    const schema = {
+      anyOf: [
+        { type: 'string' },
+        { type: 'null' }
+      ]
+    };
+    expect(swaggerTypeToTsType(schema)).toBe('string | null');
+  });
+
+  test('swaggerTypeToTsType handles oneOf', () => {
+    const schema = {
+      oneOf: [
+        { type: 'integer' },
+        { type: 'string' }
+      ]
+    };
+    expect(swaggerTypeToTsType(schema)).toBe('number | string');
   });
 
   test('getResponseType from OpenAPI 3 content', () => {

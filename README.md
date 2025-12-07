@@ -36,6 +36,7 @@ npx swagger2api-v3 init
 The tool automatically generates configuration files in the corresponding format based on the project environment:
 
 **CommonJS Environment** (`"type": "commonjs"` or not set):
+
 ```javascript
 const config = {
   input: 'https://petstore.swagger.io/v2/swagger.json',
@@ -55,6 +56,7 @@ module.exports = config;
 ```
 
 **ES Module Environment** (`"type": "module"`):
+
 ```javascript
 const config = {
   // ... same configuration
@@ -71,19 +73,20 @@ npx swagger2api-v3 generate
 
 ## ⚙️ Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `input` | string | - | Swagger JSON file path or URL |
-| `output` | string | `'./src/api'` | Output directory for generated code |
-| `generator` | string | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation |
-| `groupByTags` | boolean | `true` | Whether to group files by tags |
-| `overwrite` | boolean | `true` | Whether to overwrite existing files |
-| `prefix` | string | `''` | Common prefix for API paths |
-| `importTemplate` | string | - | Import statement template for request function |
-| `requestStyle` | 'method' \| 'generic' | `'generic'` | Request call style: `method` uses `request.get/post`, `generic` uses `request({ method })` |
-| `lint` | string | - | Code formatting command (optional) |
-| `methodNameIgnorePrefix` | string[] | `[]` | Array of prefixes to ignore when generating method names. For example, `['api', 'auth']` will transform `apiGetName` to `getName` and `authUserInfo` to `userInfo` |
-| `options.addComments` | boolean | `true` | Whether to add detailed comments |
+| Option                   | Type                  | Default        | Description                                                                                                                                                        |
+| ------------------------ | --------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `input`                  | string                | -              | Swagger JSON file path or URL                                                                                                                                      |
+| `output`                 | string                | `'./src/api'`  | Output directory for generated code                                                                                                                                |
+| `generator`              | string                | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation                                 |
+| `groupByTags`            | boolean               | `true`         | Whether to group files by tags                                                                                                                                     |
+| `overwrite`              | boolean               | `true`         | Whether to overwrite existing files                                                                                                                                |
+| `prefix`                 | string                | `''`           | Common prefix for API paths                                                                                                                                        |
+| `importTemplate`         | string                | -              | Import statement template for request function                                                                                                                     |
+| `requestStyle`           | 'method' \| 'generic' | `'generic'`    | Request call style: `method` uses `request.get/post`, `generic` uses `request({ method })`                                                                         |
+| `lint`                   | string                | -              | Code formatting command (optional)                                                                                                                                 |
+| `methodNameIgnorePrefix` | string[]              | `[]`           | Array of prefixes to ignore when generating method names. For example, `['api', 'auth']` will transform `apiGetName` to `getName` and `authUserInfo` to `userInfo` |
+| `addMethodSuffix`        | boolean               | `true`         | Whether to add HTTP method suffix to generated function names. `true` generates `userListPost`, `false` generates `userList`                                       |
+| `options.addComments`    | boolean               | `true`         | Whether to add detailed comments                                                                                                                                   |
 
 ## 📁 Generated File Structure
 
@@ -119,7 +122,12 @@ Example generated API function (generic style):
 
 ```javascript
 export const codeAuth = (data, config) => {
-  return request({ url: '/api/auth/codeAuth', method: 'POST', data, ...config });
+  return request({
+    url: '/api/auth/codeAuth',
+    method: 'POST',
+    data,
+    ...config
+  });
 };
 ```
 
@@ -222,13 +230,13 @@ Support automatic execution of formatting commands after generation:
 // In configuration file
 const config = {
   // ... other configurations
-  lint: 'prettier --write'  // or 'eslint --fix', etc.
+  lint: 'prettier --write' // or 'eslint --fix', etc.
 };
 ```
 
 ## 🤝 Contributing
 
-Issues and Pull Requests are welcome!
+If you encounter any problems or have suggestions, please feel free to [submit an issue](https://github.com/xiaoyang33/swagger2api-v3/issues) on GitHub. Pull Requests are also welcome!
 
 ## 📄 License
 
