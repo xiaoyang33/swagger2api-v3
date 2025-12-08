@@ -2,7 +2,7 @@
 
 English | [中文](./README_CN.md)
 
-A powerful command-line tool for automatically generating TypeScript interface code from Swagger (OAS3.0) documentation.
+A powerful command-line tool for automatically generating TypeScript or JavaScript interface code from OpenAPI 3.0 documentation.
 
 ## ✨ Features
 
@@ -33,36 +33,25 @@ npx swagger2api-v3 init
 
 ### 2. Configuration File Description
 
-The tool automatically generates configuration files in the corresponding format based on the project environment:
+The tool generates a `.swagger.config.json` configuration file:
 
-**CommonJS Environment** (`"type": "commonjs"` or not set):
-
-```javascript
-const config = {
-  input: 'https://petstore.swagger.io/v2/swagger.json',
-  output: './src/api',
-  importTemplate: "import { request } from '@/utils/request';",
-  generator: 'typescript',
-  groupByTags: true,
-  overwrite: true,
-  prefix: '',
-  lint: 'prettier --write',
-  options: {
-    addComments: true
+```json
+{
+  "input": "https://petstore.swagger.io/v2/swagger.json",
+  "output": "./src/api",
+  "importTemplate": "import { request } from '@/utils/request';",
+  "generator": "typescript",
+  "requestStyle": "generic",
+  "groupByTags": true,
+  "overwrite": true,
+  "prefix": "",
+  "lint": "prettier --write",
+  "methodNameIgnorePrefix": [],
+  "addMethodSuffix": true,
+  "options": {
+    "addComments": true
   }
-};
-
-module.exports = config;
-```
-
-**ES Module Environment** (`"type": "module"`):
-
-```javascript
-const config = {
-  // ... same configuration
-};
-
-export default config;
+}
 ```
 
 ### 3. Generate Interface Code
@@ -226,12 +215,10 @@ Add to `package.json`:
 
 Support automatic execution of formatting commands after generation:
 
-```javascript
-// In configuration file
-const config = {
-  // ... other configurations
-  lint: 'prettier --write' // or 'eslint --fix', etc.
-};
+```json
+{
+  "lint": "prettier --write"
+}
 ```
 
 ## 🤝 Contributing

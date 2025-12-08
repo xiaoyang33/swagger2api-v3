@@ -1,0 +1,16 @@
+{
+  "input": "http://localhost:3000/admin/docs/json",
+  "output": "./src/api",
+  "importTemplate": "import { request } from '@/utils/request';",
+  "generator": "typescript",
+  "requestStyle": "generic",
+  "groupByTags": true,
+  "overwrite": true,
+  "prefix": "",
+  "lint": "prettier --write",
+  "methodNameIgnorePrefix": [],
+  "addMethodSuffix": true,
+  "options": {
+    "addComments": true
+  }
+}

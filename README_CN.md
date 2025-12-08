@@ -2,7 +2,7 @@
 
 中文 | [English](./README.md)
 
-一个强大的命令行工具，用于从 Swagger(OAS3.0) 文档自动生成 TypeScript 接口代码。
+一个强大的命令行工具，用于从 OpenAPI 3.0 文档自动生成 TypeScript 或 JavaScript 接口代码。
 
 ## ✨ 特性
 
@@ -33,36 +33,25 @@ npx swagger2api-v3 init
 
 ### 2. 配置文件说明
 
-工具会根据项目环境自动生成对应格式的配置文件：
+工具会生成 `.swagger.config.json` 配置文件：
 
-**CommonJS 环境** (`"type": "commonjs"` 或未设置)：
-
-```javascript
-const config = {
-  input: 'https://petstore.swagger.io/v2/swagger.json',
-  output: './src/api',
-  importTemplate: "import { request } from '@/utils/request';",
-  generator: 'typescript',
-  groupByTags: true,
-  overwrite: true,
-  prefix: '',
-  lint: 'prettier --write',
-  options: {
-    addComments: true
+```json
+{
+  "input": "https://petstore.swagger.io/v2/swagger.json",
+  "output": "./src/api",
+  "importTemplate": "import { request } from '@/utils/request';",
+  "generator": "typescript",
+  "requestStyle": "generic",
+  "groupByTags": true,
+  "overwrite": true,
+  "prefix": "",
+  "lint": "prettier --write",
+  "methodNameIgnorePrefix": [],
+  "addMethodSuffix": true,
+  "options": {
+    "addComments": true
   }
-};
-
-module.exports = config;
-```
-
-**ES 模块环境** (`"type": "module"`)：
-
-```javascript
-const config = {
-  // ... 相同配置
-};
-
-export default config;
+}
 ```
 
 ### 3. 生成接口代码
@@ -226,12 +215,10 @@ npx swagger2api-v3 --help
 
 支持在生成完成后自动执行格式化命令：
 
-```javascript
-// 配置文件中
-const config = {
-  // ... 其他配置
-  lint: 'prettier --write' // 或 'eslint --fix' 等
-};
+```json
+{
+  "lint": "prettier --write"
+}
 ```
 
 ## 🤝 贡献指南

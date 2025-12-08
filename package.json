@@ -1,6 +1,6 @@
 {
   "name": "swagger2api-v3",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "A command-line tool for generating TypeScript API interfaces from Swagger (OAS 3.0) documentation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

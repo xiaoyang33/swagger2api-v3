@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { SwaggerConfig } from './types';
 import { SwaggerParser } from './core/parser';
 import { CodeGenerator } from './core/generator';
@@ -98,17 +99,22 @@ export class Swagger2API {
  * @param configPath 配置文件路径
  */
 export async function generateFromConfig(configPath?: string): Promise<void> {
-  const configFile = configPath || '.swagger.config.ts';
+  const configFile = configPath || '.swagger.config.json';
   const fullPath = path.resolve(process.cwd(), configFile);
 
   try {
     let config: SwaggerConfig;
 
-    // 使用动态import加载配置文件以支持ES模块语法
-    const fileUrl = `file:///${fullPath.replace(/\\/g, '/')}?t=${Date.now()}`;
-    const dynamicImport = new Function('specifier', 'return import(specifier)');
-    const configModule = await dynamicImport(fileUrl);
-    config = configModule.default || configModule;
+    // 读取并解析 JSON 配置文件
+    if (!fs.existsSync(fullPath)) {
+      console.error(`❌ 找不到配置文件: ${fullPath}`);
+      console.error('请确保配置文件存在并且路径正确');
+      console.error('提示: 运行 swagger2api-v3 init 来创建配置文件');
+      process.exit(1);
+    }
+
+    const configContent = fs.readFileSync(fullPath, 'utf-8');
+    config = JSON.parse(configContent);
 
     const swagger2api = new Swagger2API(config);
 
@@ -118,12 +124,10 @@ export async function generateFromConfig(configPath?: string): Promise<void> {
 
     await swagger2api.generate();
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes('Cannot resolve module')
-    ) {
-      console.error(`❌ 找不到配置文件: ${fullPath}`);
-      console.error('请确保配置文件存在并且路径正确');
+    if (error instanceof SyntaxError) {
+      console.error(`❌ 配置文件 JSON 格式错误: ${fullPath}`);
+      console.error('请检查 JSON 语法是否正确');
+      console.error('错误详情:', error.message);
     } else {
       console.error('❌ 加载配置文件失败:', error);
     }
