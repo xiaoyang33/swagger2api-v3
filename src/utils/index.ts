@@ -140,6 +140,50 @@ export function removeMethodSuffix(
   return functionName;
 }
 
+export function stripNullFromUnion(typeStr: string): string {
+  if (!typeStr) return 'any';
+
+  const parts: string[] = [];
+  let current = '';
+  let parenDepth = 0;
+  let angleDepth = 0;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+
+  for (let i = 0; i < typeStr.length; i++) {
+    const ch = typeStr[i];
+
+    if (ch === '(') parenDepth++;
+    else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+    else if (ch === '<') angleDepth++;
+    else if (ch === '>') angleDepth = Math.max(0, angleDepth - 1);
+    else if (ch === '{') braceDepth++;
+    else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1);
+    else if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth = Math.max(0, bracketDepth - 1);
+
+    const isTopLevel =
+      parenDepth === 0 &&
+      angleDepth === 0 &&
+      braceDepth === 0 &&
+      bracketDepth === 0;
+
+    if (ch === '|' && isTopLevel) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current.trim()) parts.push(current.trim());
+
+  const normalized = Array.from(
+    new Set(parts.filter((p) => p && p !== 'null'))
+  );
+  return normalized.length > 0 ? normalized.join(' | ') : 'any';
+}
 
 /**
  * 将Swagger类型转换为TypeScript类型
@@ -172,7 +216,7 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
         for (const [propName, propSchema] of Object.entries(
           secondSchema.properties
         )) {
-          const propType = swaggerTypeToTsType(propSchema as any);
+          const propType = swaggerTypeToTsType(propSchema as any, schemas);
           propertyTypes.push(propType);
         }
 
@@ -185,7 +229,8 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
           const combinedType = `{ ${Object.entries(secondSchema.properties)
             .map(([key, value]: [string, any]) => {
               const optional = secondSchema.required?.includes(key) ? '' : '?';
-              const type = swaggerTypeToTsType(value as any);
+              let type = swaggerTypeToTsType(value as any, schemas);
+              if (optional === '?') type = stripNullFromUnion(type);
               return `${key}${optional}: ${type}`;
             })
             .join('; ')} }`;
@@ -206,30 +251,38 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
   }
   // 处理 anyOf 或 oneOf
   else if (schema.anyOf || schema.oneOf) {
-    const types = (schema.anyOf || schema.oneOf)
-      .map((s: any) => {
-        // 特殊处理 type: 'null'
-        if (s.type === 'null') return 'null';
-        return swaggerTypeToTsType(s);
-      })
-      .filter((t: string) => t !== 'any');
+    const types = (schema.anyOf || schema.oneOf).map((s: any) => {
+      // 特殊处理 type: 'null'
+      if (s.type === 'null') return 'null';
+      return swaggerTypeToTsType(s, schemas);
+    });
 
-    // 去重
-    const uniqueTypes = Array.from(new Set(types));
-
-    if (uniqueTypes.length > 0) {
-      baseType = uniqueTypes.join(' | ');
-    } else {
+    // 如果包含 any，则直接返回 any
+    if (types.includes('any')) {
       baseType = 'any';
+    } else {
+      // 去重
+      const uniqueTypes = Array.from(new Set(types));
+
+      if (uniqueTypes.length > 0) {
+        baseType = uniqueTypes.join(' | ');
+      } else {
+        baseType = 'any';
+      }
     }
   }
   // 处理引用类型
   else if (schema.$ref) {
     const refName = schema.$ref.split('/').pop();
     baseType = sanitizeTypeName(refName || 'any');
-    
+
     // 如果提供了 schemas 上下文,检查被引用的 schema 是否是数组类型
-    if (schemas && refName) {
+    if (
+      schemas &&
+      refName &&
+      typeof schema.$ref === 'string' &&
+      schema.$ref.startsWith('#/')
+    ) {
       const referencedSchema = schemas[refName];
       if (referencedSchema && referencedSchema.type === 'array') {
         // 被引用的 schema 是数组类型,添加 []
@@ -239,8 +292,25 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
   }
   // 处理数组类型
   else if (schema.type === 'array') {
-    const itemType = swaggerTypeToTsType(schema.items);
-    baseType = `${itemType}[]`;
+    const itemSchema = schema.items;
+    const itemType = swaggerTypeToTsType(itemSchema, schemas);
+
+    if (
+      itemSchema?.$ref &&
+      schemas &&
+      typeof itemSchema.$ref === 'string' &&
+      itemSchema.$ref.startsWith('#/')
+    ) {
+      const refName = itemSchema.$ref.split('/').pop();
+      const referencedSchema = refName ? schemas[refName] : undefined;
+      if (referencedSchema?.type === 'array') {
+        baseType = itemType;
+      } else {
+        baseType = `${itemType}[]`;
+      }
+    } else {
+      baseType = `${itemType}[]`;
+    }
   }
   // 处理对象类型
   else if (schema.type === 'object') {
@@ -248,7 +318,8 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
       const properties = Object.entries(schema.properties)
         .map(([key, value]: [string, any]) => {
           const optional = schema.required?.includes(key) ? '' : '?';
-          const type = swaggerTypeToTsType(value);
+          let type = swaggerTypeToTsType(value, schemas);
+          if (optional === '?') type = stripNullFromUnion(type);
           return `  ${key}${optional}: ${type};`;
         })
         .join('\n');
@@ -288,6 +359,8 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
 
   // 处理 nullable 属性
   if (schema.nullable === true) {
+    if (baseType === 'any') return 'any';
+    if (baseType.includes('null')) return baseType;
     return `${baseType} | null`;
   }
 

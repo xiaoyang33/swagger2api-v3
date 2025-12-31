@@ -70,4 +70,40 @@ describe('parser', () => {
     expect(info.title).toBe('template-admin');
     expect(info.version).toBe('1.0');
   });
+
+  test('parseTypes strips null from optional properties', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {},
+      components: {
+        schemas: {
+          NullRulesDto: {
+            type: 'object',
+            properties: {
+              reqNullable: { type: 'string', nullable: true },
+              optNullable: { type: 'string', nullable: true },
+              reqAnyOfNull: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+              optAnyOfNull: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+              reqAnyNull: { anyOf: [{}, { type: 'null' }] }
+            },
+            required: ['reqNullable', 'reqAnyOfNull', 'reqAnyNull']
+          }
+        }
+      }
+    };
+
+    const parser = new SwaggerParser(doc as any, config);
+    const types = parser.parseTypes();
+    const t = types.find((x) => x.name === 'NullRulesDto');
+    expect(t).toBeDefined();
+    const def = t!.definition;
+
+    expect(def).toContain('reqNullable: string | null;');
+    expect(def).toContain('optNullable?: string;');
+    expect(def).toContain('reqAnyOfNull: string | null;');
+    expect(def).toContain('optAnyOfNull?: string;');
+    expect(def).toContain('reqAnyNull: any;');
+    expect(def).not.toContain('reqAnyNull: any | null;');
+  });
 });

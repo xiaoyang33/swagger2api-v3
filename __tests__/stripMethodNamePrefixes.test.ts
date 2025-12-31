@@ -7,9 +7,15 @@ describe('stripMethodNamePrefixes', () => {
   });
 
   test('removes multiple prefixes', () => {
-    expect(stripMethodNamePrefixes('apiGetName', ['api', 'auth'])).toBe('getName');
-    expect(stripMethodNamePrefixes('authUserInfo', ['api', 'auth'])).toBe('userInfo');
-    expect(stripMethodNamePrefixes('apiAuthGetName', ['api', 'auth'])).toBe('getName');
+    expect(stripMethodNamePrefixes('apiGetName', ['api', 'auth'])).toBe(
+      'getName'
+    );
+    expect(stripMethodNamePrefixes('authUserInfo', ['api', 'auth'])).toBe(
+      'userInfo'
+    );
+    expect(stripMethodNamePrefixes('apiAuthGetName', ['api', 'auth'])).toBe(
+      'getName'
+    );
   });
 
   test('handles case insensitive matching', () => {
@@ -19,7 +25,9 @@ describe('stripMethodNamePrefixes', () => {
   });
 
   test('returns original name when no prefix matches', () => {
-    expect(stripMethodNamePrefixes('getUserInfo', ['api', 'auth'])).toBe('getUserInfo');
+    expect(stripMethodNamePrefixes('getUserInfo', ['api', 'auth'])).toBe(
+      'getUserInfo'
+    );
     expect(stripMethodNamePrefixes('createPost', ['api'])).toBe('createPost');
   });
 
@@ -30,12 +38,18 @@ describe('stripMethodNamePrefixes', () => {
 
   test('removes all matching prefixes iteratively', () => {
     expect(stripMethodNamePrefixes('apiApiGetName', ['api'])).toBe('getName');
-    expect(stripMethodNamePrefixes('authApiAuthGetName', ['api', 'auth'])).toBe('getName');
+    expect(stripMethodNamePrefixes('authApiAuthGetName', ['api', 'auth'])).toBe(
+      'getName'
+    );
   });
 
   test('preserves camelCase after prefix removal', () => {
-    expect(stripMethodNamePrefixes('apiGetUserInfo', ['api'])).toBe('getUserInfo');
-    expect(stripMethodNamePrefixes('authCreateNewPost', ['auth'])).toBe('createNewPost');
+    expect(stripMethodNamePrefixes('apiGetUserInfo', ['api'])).toBe(
+      'getUserInfo'
+    );
+    expect(stripMethodNamePrefixes('authCreateNewPost', ['auth'])).toBe(
+      'createNewPost'
+    );
   });
 
   test('handles prefix that matches entire name', () => {

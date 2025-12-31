@@ -7,6 +7,7 @@ import {
   toCamelCase,
   sanitizeFilename,
   sanitizeTypeName, // Add import
+  stripNullFromUnion,
   swaggerTypeToTsType,
   getResponseType,
   generateParameterTypes,
@@ -46,8 +47,8 @@ describe('utils', () => {
   });
 
   test('swaggerTypeToTsType handles refs with dots', () => {
-     const schema = { $ref: '#/components/schemas/System.Menu.ListResp' } as any;
-     expect(swaggerTypeToTsType(schema)).toBe('SystemMenuListResp');
+    const schema = { $ref: '#/components/schemas/System.Menu.ListResp' } as any;
+    expect(swaggerTypeToTsType(schema)).toBe('SystemMenuListResp');
   });
 
   test('swaggerTypeToTsType basic types and arrays', () => {
@@ -74,22 +75,35 @@ describe('utils', () => {
 
   test('swaggerTypeToTsType handles anyOf with null', () => {
     const schema = {
-      anyOf: [
-        { type: 'string' },
-        { type: 'null' }
-      ]
+      anyOf: [{ type: 'string' }, { type: 'null' }]
     };
     expect(swaggerTypeToTsType(schema)).toBe('string | null');
   });
 
   test('swaggerTypeToTsType handles oneOf', () => {
     const schema = {
-      oneOf: [
-        { type: 'integer' },
-        { type: 'string' }
-      ]
+      oneOf: [{ type: 'integer' }, { type: 'string' }]
     };
     expect(swaggerTypeToTsType(schema)).toBe('number | string');
+  });
+
+  test('stripNullFromUnion removes top-level null and keeps nested unions', () => {
+    expect(stripNullFromUnion('string | null')).toBe('string');
+    expect(stripNullFromUnion('null | any')).toBe('any');
+    expect(stripNullFromUnion('ResOp<{ a: string | null }> | null')).toBe(
+      'ResOp<{ a: string | null }>'
+    );
+  });
+
+  test('swaggerTypeToTsType avoids duplicate arrays for array-of-array-ref', () => {
+    const schemas = {
+      List: { type: 'array', items: { type: 'string' } }
+    } as any;
+    const schema = {
+      type: 'array',
+      items: { $ref: '#/components/schemas/List' }
+    } as any;
+    expect(swaggerTypeToTsType(schema, schemas)).toBe('List[]');
   });
 
   test('getResponseType from OpenAPI 3 content', () => {

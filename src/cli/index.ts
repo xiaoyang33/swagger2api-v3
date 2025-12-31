@@ -92,7 +92,9 @@ program
     try {
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
       console.log('✅ 配置文件已创建:', configPath);
-      console.log('💡 请根据需要修改配置文件，然后运行 swagger2api-v3 generate');
+      console.log(
+        '💡 请根据需要修改配置文件，然后运行 swagger2api-v3 generate'
+      );
     } catch (error) {
       console.error('❌ 创建配置文件失败:', error);
       process.exit(1);

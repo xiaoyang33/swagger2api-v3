@@ -1,5 +1,5 @@
 {
-  "input": "http://localhost:3000/admin/docs/json",
+  "input": "http://localhost:8000/docs/json",
   "output": "./src/api",
   "importTemplate": "import { request } from '@/utils/request';",
   "generator": "typescript",

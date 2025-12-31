@@ -9,6 +9,7 @@ import {
 import {
   pathToFunctionName,
   swaggerTypeToTsType,
+  stripNullFromUnion,
   generateParameterTypes,
   getResponseType,
   toPascalCase,
@@ -16,7 +17,6 @@ import {
   sanitizeTypeName,
   removeMethodSuffix
 } from '../utils';
-
 
 /**
  * Swagger文档解析器
@@ -145,7 +145,6 @@ export class SwaggerParser {
       this.config.methodNameIgnorePrefix
     );
 
-
     // 获取响应类型
     const responseType = getResponseType(operation.responses);
 
@@ -188,16 +187,19 @@ export class SwaggerParser {
    */
   parseTypes(): TypeInfo[] {
     const types: TypeInfo[] = [];
-    
+
     // Debug log
     console.log('解析类型定义...');
     console.log('Has definitions:', !!this.document.definitions);
     console.log('Has components:', !!this.document.components);
     if (this.document.components) {
-        console.log('Has schemas:', !!this.document.components.schemas);
-        if (this.document.components.schemas) {
-            console.log('Schema keys:', Object.keys(this.document.components.schemas));
-        }
+      console.log('Has schemas:', !!this.document.components.schemas);
+      if (this.document.components.schemas) {
+        console.log(
+          'Schema keys:',
+          Object.keys(this.document.components.schemas)
+        );
+      }
     }
 
     // 解析 Swagger 2.0 definitions
@@ -232,7 +234,7 @@ export class SwaggerParser {
   private parseTypeDefinition(name: string, schema: any): TypeInfo {
     const typeName = toPascalCase(name);
     let definition: string;
-    
+
     // 获取所有 schemas 用于类型解析
     const allSchemas = this.getAllSchemas();
 
@@ -241,7 +243,8 @@ export class SwaggerParser {
       const properties = Object.entries(schema.properties)
         .map(([key, value]: [string, any]) => {
           const optional = schema.required?.includes(key) ? '' : '?';
-          const type = swaggerTypeToTsType(value, allSchemas);
+          let type = swaggerTypeToTsType(value, allSchemas);
+          if (optional === '?') type = stripNullFromUnion(type);
           const comment = value.description
             ? ` /** ${value.description} */`
             : '';
@@ -260,11 +263,15 @@ export class SwaggerParser {
       const enumValues = schema.enum
         .map((value: any, index: number) => {
           let key = value;
-          
+
           // 优先使用 x-enum-varnames 或 x-enumNames 扩展字段
-          if ((schema['x-enum-varnames'] && schema['x-enum-varnames'][index]) || 
-              (schema['x-enumNames'] && schema['x-enumNames'][index])) {
-            key = schema['x-enum-varnames']?.[index] || schema['x-enumNames']?.[index];
+          if (
+            (schema['x-enum-varnames'] && schema['x-enum-varnames'][index]) ||
+            (schema['x-enumNames'] && schema['x-enumNames'][index])
+          ) {
+            key =
+              schema['x-enum-varnames']?.[index] ||
+              schema['x-enumNames']?.[index];
           } else if (/^\d+$/.test(value)) {
             // 对于数字枚举，使用 VALUE_ 前缀
             key = `VALUE_${value}`;

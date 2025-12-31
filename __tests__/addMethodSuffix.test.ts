@@ -48,7 +48,14 @@ describe('addMethodSuffix configuration', () => {
       '/users/{id}': {
         get: {
           tags: ['User'],
-          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' }
+            }
+          ],
           responses: {
             200: {
               description: 'Success',
@@ -79,9 +86,15 @@ describe('addMethodSuffix configuration', () => {
     const parser = new SwaggerParser(baseDoc as any, config);
     const apis = parser.parseApis();
 
-    const getUsersApi = apis.find(api => api.path === '/users' && api.method === 'GET');
-    const createUserApi = apis.find(api => api.path === '/users' && api.method === 'POST');
-    const getUserByIdApi = apis.find(api => api.path === '/users/{id}' && api.method === 'GET');
+    const getUsersApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'GET'
+    );
+    const createUserApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'POST'
+    );
+    const getUserByIdApi = apis.find(
+      (api) => api.path === '/users/{id}' && api.method === 'GET'
+    );
 
     expect(getUsersApi?.name).toBe('getUsersGet');
     expect(createUserApi?.name).toBe('createUserPost');
@@ -100,9 +113,15 @@ describe('addMethodSuffix configuration', () => {
     const parser = new SwaggerParser(baseDoc as any, config);
     const apis = parser.parseApis();
 
-    const getUsersApi = apis.find(api => api.path === '/users' && api.method === 'GET');
-    const createUserApi = apis.find(api => api.path === '/users' && api.method === 'POST');
-    const getUserByIdApi = apis.find(api => api.path === '/users/{id}' && api.method === 'GET');
+    const getUsersApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'GET'
+    );
+    const createUserApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'POST'
+    );
+    const getUserByIdApi = apis.find(
+      (api) => api.path === '/users/{id}' && api.method === 'GET'
+    );
 
     expect(getUsersApi?.name).toBe('getUsers');
     expect(createUserApi?.name).toBe('createUser');
@@ -121,8 +140,10 @@ describe('addMethodSuffix configuration', () => {
     const parser = new SwaggerParser(baseDoc as any, config);
     const apis = parser.parseApis();
 
-    const getUsersApi = apis.find(api => api.path === '/users' && api.method === 'GET');
-    
+    const getUsersApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'GET'
+    );
+
     // Should default to true, so suffix should be added
     expect(getUsersApi?.name).toBe('getUsersGet');
   });
@@ -133,7 +154,7 @@ describe('addMethodSuffix configuration', () => {
     expect(removeMethodSuffix('updateUserPut', 'put')).toBe('updateUser');
     expect(removeMethodSuffix('deleteUserDelete', 'delete')).toBe('deleteUser');
     expect(removeMethodSuffix('patchUserPatch', 'patch')).toBe('patchUser');
-    
+
     // Should not remove if suffix doesn't match
     expect(removeMethodSuffix('getUsers', 'post')).toBe('getUsers');
     expect(removeMethodSuffix('someFunction', 'get')).toBe('someFunction');
@@ -152,8 +173,12 @@ describe('addMethodSuffix configuration', () => {
     const parser = new SwaggerParser(baseDoc as any, config);
     const apis = parser.parseApis();
 
-    const getUsersApi = apis.find(api => api.path === '/users' && api.method === 'GET');
-    const createUserApi = apis.find(api => api.path === '/users' && api.method === 'POST');
+    const getUsersApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'GET'
+    );
+    const createUserApi = apis.find(
+      (api) => api.path === '/users' && api.method === 'POST'
+    );
 
     // Prefix should be removed, and no method suffix
     expect(getUsersApi?.name).toBe('users');

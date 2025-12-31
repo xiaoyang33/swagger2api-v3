@@ -51,22 +51,30 @@ describe('Array type reference generation', () => {
     const types = parser.parseTypes();
 
     // 找到各个类型
-    const menuTreeType = types.find(t => t.name === 'SystemMenuTreeDto');
-    const menuListType = types.find(t => t.name === 'SystemMenuListRespDto');
-    const responseType = types.find(t => t.name === 'ResponseSystemMenuListRespDto');
+    const menuTreeType = types.find((t) => t.name === 'SystemMenuTreeDto');
+    const menuListType = types.find((t) => t.name === 'SystemMenuListRespDto');
+    const responseType = types.find(
+      (t) => t.name === 'ResponseSystemMenuListRespDto'
+    );
 
     // SystemMenuTreeDto 应该是一个普通的 interface
-    expect(menuTreeType?.definition).toContain('export interface SystemMenuTreeDto');
-    
+    expect(menuTreeType?.definition).toContain(
+      'export interface SystemMenuTreeDto'
+    );
+
     // SystemMenuListRespDto 应该是一个类型别名,指向 SystemMenuTreeDto (不带 [])
     // 期望: export type SystemMenuListRespDto = SystemMenuTreeDto;
     // 而不是: export type SystemMenuListRespDto = SystemMenuTreeDto[];
-    expect(menuListType?.definition).toContain('export type SystemMenuListRespDto');
+    expect(menuListType?.definition).toContain(
+      'export type SystemMenuListRespDto'
+    );
     expect(menuListType?.definition).toContain('SystemMenuTreeDto');
     expect(menuListType?.definition).not.toMatch(/SystemMenuTreeDto\[\]/);
 
     // ResponseSystemMenuListRespDto 的 data 字段应该是 SystemMenuListRespDto[]
-    expect(responseType?.definition).toContain('export interface ResponseSystemMenuListRespDto');
+    expect(responseType?.definition).toContain(
+      'export interface ResponseSystemMenuListRespDto'
+    );
     expect(responseType?.definition).toContain('data: SystemMenuListRespDto[]');
   });
 
@@ -108,8 +116,8 @@ describe('Array type reference generation', () => {
     const parser = new SwaggerParser(doc as any, config);
     const types = parser.parseTypes();
 
-    const userListType = types.find(t => t.name === 'UserList');
-    const responseType = types.find(t => t.name === 'Response');
+    const userListType = types.find((t) => t.name === 'UserList');
+    const responseType = types.find((t) => t.name === 'Response');
 
     // UserList 应该是类型别名,不带 []
     expect(userListType?.definition).toContain('export type UserList = User');

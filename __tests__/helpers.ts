@@ -32,7 +32,9 @@ export function getSampleDoc() {
           requestBody: {
             required: true,
             content: {
-              'application/json': { schema: { $ref: '#/components/schemas/LoginDto' } }
+              'application/json': {
+                schema: { $ref: '#/components/schemas/LoginDto' }
+              }
             }
           },
           responses: {
@@ -43,7 +45,11 @@ export function getSampleDoc() {
                   schema: {
                     allOf: [
                       { $ref: '#/components/schemas/ResOp' },
-                      { properties: { data: { $ref: '#/components/schemas/LoginRespDto' } } }
+                      {
+                        properties: {
+                          data: { $ref: '#/components/schemas/LoginRespDto' }
+                        }
+                      }
                     ]
                   }
                 }
@@ -60,7 +66,9 @@ export function getSampleDoc() {
           requestBody: {
             required: true,
             content: {
-              'application/json': { schema: { $ref: '#/components/schemas/UserListDto' } }
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UserListDto' }
+              }
             }
           },
           responses: {
@@ -71,7 +79,11 @@ export function getSampleDoc() {
                   schema: {
                     allOf: [
                       { $ref: '#/components/schemas/ResOp' },
-                      { properties: { data: { $ref: '#/components/schemas/UserListRespDto' } } }
+                      {
+                        properties: {
+                          data: { $ref: '#/components/schemas/UserListRespDto' }
+                        }
+                      }
                     ]
                   }
                 }
@@ -93,7 +105,11 @@ export function getSampleDoc() {
                   schema: {
                     allOf: [
                       { $ref: '#/components/schemas/ResOp' },
-                      { properties: { data: { $ref: '#/components/schemas/MenuListRespDto' } } }
+                      {
+                        properties: {
+                          data: { $ref: '#/components/schemas/MenuListRespDto' }
+                        }
+                      }
                     ]
                   }
                 }
@@ -110,7 +126,9 @@ export function getSampleDoc() {
           requestBody: {
             required: true,
             content: {
-              'application/json': { schema: { $ref: '#/components/schemas/RoleListDto' } }
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RoleListDto' }
+              }
             }
           },
           responses: {
@@ -121,7 +139,11 @@ export function getSampleDoc() {
                   schema: {
                     allOf: [
                       { $ref: '#/components/schemas/ResOp' },
-                      { properties: { data: { $ref: '#/components/schemas/RoleListResDto' } } }
+                      {
+                        properties: {
+                          data: { $ref: '#/components/schemas/RoleListResDto' }
+                        }
+                      }
                     ]
                   }
                 }
@@ -145,7 +167,10 @@ export function getSampleDoc() {
         },
         LoginDto: {
           type: 'object',
-          properties: { username: { type: 'string' }, password: { type: 'string' } }
+          properties: {
+            username: { type: 'string' },
+            password: { type: 'string' }
+          }
         },
         LoginRespDto: {
           type: 'object',
