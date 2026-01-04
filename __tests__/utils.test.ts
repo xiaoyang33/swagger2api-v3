@@ -106,6 +106,25 @@ describe('utils', () => {
     expect(swaggerTypeToTsType(schema, schemas)).toBe('List[]');
   });
 
+  test('swaggerTypeToTsType handles bare ref to array schema and avoids [][]', () => {
+    const schemas = {
+      MenuListRespDto: {
+        type: 'array',
+        items: { $id: 'MenuListRespDto', type: 'object', properties: {} }
+      }
+    } as any;
+
+    expect(swaggerTypeToTsType({ $ref: 'MenuListRespDto' }, schemas)).toBe(
+      'MenuListRespDto[]'
+    );
+
+    const schema = {
+      type: 'array',
+      items: { $ref: 'MenuListRespDto' }
+    } as any;
+    expect(swaggerTypeToTsType(schema, schemas)).toBe('MenuListRespDto[]');
+  });
+
   test('getResponseType from OpenAPI 3 content', () => {
     const responses = {
       200: {

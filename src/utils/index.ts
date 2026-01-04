@@ -277,12 +277,7 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
     baseType = sanitizeTypeName(refName || 'any');
 
     // 如果提供了 schemas 上下文,检查被引用的 schema 是否是数组类型
-    if (
-      schemas &&
-      refName &&
-      typeof schema.$ref === 'string' &&
-      schema.$ref.startsWith('#/')
-    ) {
+    if (schemas && refName) {
       const referencedSchema = schemas[refName];
       if (referencedSchema && referencedSchema.type === 'array') {
         // 被引用的 schema 是数组类型,添加 []
@@ -295,12 +290,7 @@ export function swaggerTypeToTsType(schema: any, schemas?: any): string {
     const itemSchema = schema.items;
     const itemType = swaggerTypeToTsType(itemSchema, schemas);
 
-    if (
-      itemSchema?.$ref &&
-      schemas &&
-      typeof itemSchema.$ref === 'string' &&
-      itemSchema.$ref.startsWith('#/')
-    ) {
+    if (itemSchema?.$ref && schemas) {
       const refName = itemSchema.$ref.split('/').pop();
       const referencedSchema = refName ? schemas[refName] : undefined;
       if (referencedSchema?.type === 'array') {
