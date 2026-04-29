@@ -71,6 +71,28 @@ describe('parser', () => {
     expect(info.version).toBe('1.0');
   });
 
+  test('getBaseUrl returns OpenAPI server url with default variables', () => {
+    const parser = new SwaggerParser(
+      {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0' },
+        servers: [
+          {
+            url: 'https://{env}.example.com/{basePath}',
+            variables: {
+              env: { default: 'api' },
+              basePath: { default: 'v1' }
+            }
+          }
+        ],
+        paths: {}
+      },
+      config
+    );
+
+    expect(parser.getBaseUrl()).toBe('https://api.example.com/v1');
+  });
+
   test('parseTypes strips null from optional properties', () => {
     const doc = {
       openapi: '3.0.0',
@@ -105,5 +127,90 @@ describe('parser', () => {
     expect(def).toContain('optAnyOfNull?: string;');
     expect(def).toContain('reqAnyNull: any;');
     expect(def).not.toContain('reqAnyNull: any | null;');
+  });
+
+  test('parseApis supports OpenAPI refs and non-json requestBody content', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {
+        '/upload/{id}': {
+          post: {
+            operationId: 'uploadFile',
+            tags: ['Upload'],
+            parameters: [
+              { $ref: '#/components/parameters/IdParam' },
+              {
+                name: 'tags',
+                in: 'query',
+                required: false,
+                schema: {
+                  type: 'array',
+                  items: { type: 'string' }
+                }
+              }
+            ],
+            requestBody: {
+              $ref: '#/components/requestBodies/UploadBody'
+            },
+            responses: {
+              202: {
+                description: 'accepted',
+                content: {
+                  'application/vnd.api+json': {
+                    schema: { $ref: '#/components/schemas/UploadResp' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      components: {
+        parameters: {
+          IdParam: {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' }
+          }
+        },
+        requestBodies: {
+          UploadBody: {
+            required: true,
+            content: {
+              'multipart/form-data': {
+                schema: { $ref: '#/components/schemas/UploadDto' }
+              }
+            }
+          }
+        },
+        schemas: {
+          UploadDto: {
+            type: 'object',
+            properties: {
+              file: { type: 'string', format: 'binary' }
+            }
+          },
+          UploadResp: {
+            type: 'array',
+            items: { type: 'string' }
+          }
+        }
+      }
+    };
+
+    const parser = new SwaggerParser(doc as any, config);
+    const [api] = parser.parseApis();
+
+    expect(api.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'id', type: 'string', in: 'path' }),
+        expect.objectContaining({ name: 'tags', type: 'string[]' }),
+        expect.objectContaining({ name: 'body', type: 'UploadDto' })
+      ])
+    );
+    expect(api.responseType).toBe('UploadResp[]');
+    expect(api.requestBodyType).toBe('UploadDto');
   });
 });

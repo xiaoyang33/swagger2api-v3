@@ -81,21 +81,33 @@ export interface CommentConfig {
 }
 
 /**
- * Swagger文档结构
+ * OpenAPI 文档结构
  */
 export interface SwaggerDocument {
-  swagger?: string;
-  openapi?: string;
+  openapi: string;
   info: SwaggerInfo;
-  host?: string;
-  basePath?: string;
-  schemes?: string[];
-  consumes?: string[];
-  produces?: string[];
+  servers?: OpenAPIServer[];
   paths: SwaggerPaths;
-  definitions?: SwaggerDefinitions;
   components?: SwaggerComponents;
   tags?: SwaggerTag[];
+}
+
+/**
+ * OpenAPI Server 对象
+ */
+export interface OpenAPIServer {
+  /** Server URL */
+  url: string;
+  /** Server 描述 */
+  description?: string;
+  /** Server URL 变量 */
+  variables?: {
+    [name: string]: {
+      default: string;
+      enum?: string[];
+      description?: string;
+    };
+  };
 }
 
 /**
@@ -156,8 +168,6 @@ export interface SwaggerOperation {
   summary?: string;
   description?: string;
   operationId?: string;
-  consumes?: string[];
-  produces?: string[];
   parameters?: SwaggerParameter[];
   requestBody?: SwaggerRequestBody;
   responses: SwaggerResponses;
@@ -168,6 +178,8 @@ export interface SwaggerOperation {
  * Swagger请求体 (OpenAPI 3.0)
  */
 export interface SwaggerRequestBody {
+  /** 本地引用路径 */
+  $ref?: string;
   description?: string;
   content: {
     [mediaType: string]: {
@@ -180,11 +192,13 @@ export interface SwaggerRequestBody {
 }
 
 /**
- * Swagger参数
+ * OpenAPI 参数
  */
 export interface SwaggerParameter {
+  /** 本地引用路径 */
+  $ref?: string;
   name: string;
-  in: 'query' | 'header' | 'path' | 'formData' | 'body';
+  in: 'query' | 'header' | 'path' | 'body' | 'cookie';
   description?: string;
   required?: boolean;
   type?: string;
@@ -196,18 +210,24 @@ export interface SwaggerParameter {
 }
 
 /**
- * Swagger响应
+ * OpenAPI 响应
  */
 export interface SwaggerResponses {
   [statusCode: string]: SwaggerResponse;
 }
 
 /**
- * Swagger响应项
+ * OpenAPI 响应项
  */
 export interface SwaggerResponse {
   description: string;
-  schema?: SwaggerSchema;
+  content?: {
+    [mediaType: string]: {
+      schema?: SwaggerSchema;
+      example?: any;
+      examples?: { [name: string]: any };
+    };
+  };
   headers?: { [name: string]: SwaggerHeader };
   examples?: { [mediaType: string]: any };
 }
@@ -225,10 +245,10 @@ export interface SwaggerHeader {
 }
 
 /**
- * Swagger模式
+ * OpenAPI Schema
  */
 export interface SwaggerSchema {
-  type?: string;
+  type?: string | string[];
   format?: string;
   title?: string;
   description?: string;
@@ -264,13 +284,6 @@ export interface SwaggerItems {
   enum?: any[];
   default?: any;
   $ref?: string;
-}
-
-/**
- * Swagger定义
- */
-export interface SwaggerDefinitions {
-  [name: string]: SwaggerSchema;
 }
 
 /**
@@ -347,7 +360,7 @@ export interface ParameterInfo {
   /** 参数类型 */
   type: string;
   /** 参数位置 */
-  in: 'query' | 'header' | 'path' | 'formData' | 'body';
+  in: 'query' | 'header' | 'path' | 'body' | 'cookie';
   /** 是否必需 */
   required: boolean;
   /** 参数描述 */

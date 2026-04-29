@@ -49,8 +49,10 @@ describe('generator', () => {
     const typesFile = path.join(tmp, 'types.ts');
     expect(fs.existsSync(typesFile)).toBe(true);
     const typesContent = fs.readFileSync(typesFile, 'utf-8');
-    expect(typesContent).toContain('export interface ResOp');
-    expect(typesContent).toContain('data:');
+    expect(typesContent).toContain(
+      'export interface ResOp<T = Record<string, any>>'
+    );
+    expect(typesContent).toContain('data: T;');
 
     // grouped tag directories with index.ts
     const authDir = path.join(tmp, 'authController');

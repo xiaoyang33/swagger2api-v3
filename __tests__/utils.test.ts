@@ -10,6 +10,7 @@ import {
   stripNullFromUnion,
   swaggerTypeToTsType,
   getResponseType,
+  getSchemaFromContent,
   generateParameterTypes,
   ensureDirectoryExists,
   removeDirectory,
@@ -87,6 +88,28 @@ describe('utils', () => {
     expect(swaggerTypeToTsType(schema)).toBe('number | string');
   });
 
+  test('swaggerTypeToTsType handles OpenAPI 3.1 type array', () => {
+    expect(swaggerTypeToTsType({ type: ['string', 'null'] })).toBe(
+      'string | null'
+    );
+  });
+
+  test('swaggerTypeToTsType handles object additionalProperties', () => {
+    expect(
+      swaggerTypeToTsType({
+        type: 'object',
+        additionalProperties: { type: 'integer' }
+      })
+    ).toBe('Record<string, number>');
+  });
+
+  test('swaggerTypeToTsType handles non-string enum values', () => {
+    expect(swaggerTypeToTsType({ type: 'integer', enum: [0, 1] })).toBe(
+      '0 | 1'
+    );
+    expect(swaggerTypeToTsType({ enum: ['on', null] })).toBe("'on' | null");
+  });
+
   test('stripNullFromUnion removes top-level null and keeps nested unions', () => {
     expect(stripNullFromUnion('string | null')).toBe('string');
     expect(stripNullFromUnion('null | any')).toBe('any');
@@ -147,10 +170,47 @@ describe('utils', () => {
     expect(getResponseType(responses)).toBe('ResOp<LoginRespDto>');
   });
 
+  test('getResponseType uses json-like content and schemas context', () => {
+    const responses = {
+      202: {
+        description: 'accepted',
+        content: {
+          'application/problem+json': {
+            schema: { $ref: '#/components/schemas/ListResp' }
+          }
+        }
+      }
+    };
+    const schemas = {
+      ListResp: {
+        type: 'array',
+        items: { type: 'string' }
+      }
+    };
+
+    expect(getResponseType(responses, schemas)).toBe('ListResp[]');
+  });
+
+  test('getSchemaFromContent falls back to first schema media type', () => {
+    expect(
+      getSchemaFromContent({
+        'multipart/form-data': {
+          schema: { type: 'object' }
+        }
+      })
+    ).toEqual({ type: 'object' });
+  });
+
   test('generateParameterTypes builds types from parameters', () => {
     const params = [
       { name: 'id', in: 'path', required: true, type: 'string' },
-      { name: 'q', in: 'query', required: false, type: 'string' },
+      {
+        name: 'tags',
+        in: 'query',
+        required: false,
+        type: 'array',
+        items: { type: 'string' }
+      },
       {
         name: 'body',
         in: 'body',
@@ -160,7 +220,7 @@ describe('utils', () => {
     ] as any;
     const result = generateParameterTypes(params);
     expect(result).toContain('pathParams: { id: string }');
-    expect(result).toContain('queryParams?: { q?: string }');
+    expect(result).toContain('queryParams?: { tags?: string[] }');
     expect(result).toContain('data: LoginDto');
   });
 
@@ -180,7 +240,7 @@ describe('utils', () => {
   test('loadSwaggerDocument loads local file', async () => {
     const docPath = createSampleOpenAPIFile();
     const doc = await loadSwaggerDocument(docPath);
-    expect(doc.openapi || doc.swagger).toBeDefined();
+    expect(doc.openapi).toBeDefined();
     expect(doc.paths).toBeDefined();
   });
 });

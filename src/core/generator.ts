@@ -274,7 +274,7 @@ export class CodeGenerator {
 
   /**
    * 生成直接参数形式
-   * @param parameters Swagger参数数组
+   * @param parameters OpenAPI 参数数组
    * @returns 函数参数字符串
    */
   private generateDirectParameters(
@@ -286,7 +286,6 @@ export class CodeGenerator {
     const queryParams = parameters.filter((p) => p.in === 'query');
     const pathParams = parameters.filter((p) => p.in === 'path');
     const bodyParams = parameters.filter((p) => p.in === 'body');
-    const formParams = parameters.filter((p) => p.in === 'formData');
 
     // 合并路径参数和查询参数为一个params对象
     const allParams = [...pathParams, ...queryParams];
@@ -322,21 +321,6 @@ export class CodeGenerator {
       }
     }
 
-    // 表单参数
-    if (formParams.length > 0) {
-      if (isJavaScript) {
-        params.push('data');
-      } else {
-        const formType = formParams
-          .map((p) => {
-            const optional = p.required ? '' : '?';
-            return `${p.name}${optional}: ${p.type}`;
-          })
-          .join(', ');
-        params.push(`data: { ${formType} }`);
-      }
-    }
-
     // 添加可选的config参数
     params.push(isJavaScript ? 'config' : 'config?: any');
 
@@ -349,9 +333,6 @@ export class CodeGenerator {
    * @returns 类型字符串
    */
   private getTypeFromSchema(schema: any): string {
-    if (schema.$ref) {
-      return schema.$ref.split('/').pop() || 'any';
-    }
     return swaggerTypeToTsType(schema);
   }
 
@@ -463,7 +444,7 @@ export class CodeGenerator {
 
     // 检查是否包含其他常见的响应容器字段
     const hasCommonFields = ['code', 'message', 'success', 'status'].some(
-      (field) => definition.includes(`${field}:`)
+      (field) => new RegExp(`\\b${field}\\??:`).test(definition)
     );
 
     return hasDataField && hasCommonFields;
@@ -509,11 +490,8 @@ export class CodeGenerator {
 
     // 请求体数据
     const bodyParams = api.parameters.filter((p) => p.in === 'body');
-    const formParams = api.parameters.filter((p) => p.in === 'formData');
 
     if (bodyParams.length > 0) {
-      config.push('data');
-    } else if (formParams.length > 0) {
       config.push('data');
     }
 

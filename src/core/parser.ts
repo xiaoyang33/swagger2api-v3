@@ -12,6 +12,8 @@ import {
   stripNullFromUnion,
   generateParameterTypes,
   getResponseType,
+  getSchemaFromContent,
+  swaggerParameterToSchema,
   toPascalCase,
   stripMethodNamePrefixes,
   sanitizeTypeName,
@@ -31,14 +33,11 @@ export class SwaggerParser {
   }
 
   /**
-   * 获取所有 schemas (包括 definitions 和 components.schemas)
+   * 获取 OpenAPI components.schemas
    * @returns schemas 对象
    */
   private getAllSchemas(): any {
-    return {
-      ...(this.document.definitions || {}),
-      ...(this.document.components?.schemas || {})
-    };
+    return this.document.components?.schemas || {};
   }
 
   /**
@@ -97,23 +96,21 @@ export class SwaggerParser {
     const allParameters = [
       ...(globalParameters || []),
       ...(operation.parameters || [])
-    ];
+    ].map((parameter) => this.resolveReference<SwaggerParameter>(parameter));
 
     // 处理 OpenAPI 3.0 requestBody
     if (operation.requestBody) {
-      const requestBody = operation.requestBody;
-      if (requestBody.content && requestBody.content['application/json']) {
-        const schema = requestBody.content['application/json'].schema;
-        if (schema) {
-          const bodyParam: SwaggerParameter = {
-            name: 'body',
-            in: 'body',
-            required: requestBody.required || false,
-            schema: schema,
-            type: 'object'
-          };
-          allParameters.push(bodyParam);
-        }
+      const requestBody = this.resolveReference(operation.requestBody);
+      const schema = getSchemaFromContent(requestBody.content);
+      if (schema) {
+        const bodyParam: SwaggerParameter = {
+          name: 'body',
+          in: 'body',
+          required: requestBody.required || false,
+          schema,
+          type: 'object'
+        };
+        allParameters.push(bodyParam);
       }
     }
 
@@ -146,7 +143,10 @@ export class SwaggerParser {
     );
 
     // 获取响应类型
-    const responseType = getResponseType(operation.responses);
+    const responseType = getResponseType(
+      operation.responses,
+      this.getAllSchemas()
+    );
 
     // 获取请求体类型
     const bodyParam = allParameters.find((p) => p.in === 'body');
@@ -156,16 +156,17 @@ export class SwaggerParser {
 
     // 解析参数信息
     const parameters = allParameters.map((param) => {
-      const type = param.schema
-        ? swaggerTypeToTsType(param.schema)
-        : swaggerTypeToTsType({ type: param.type || 'string' });
+      const type = swaggerTypeToTsType(
+        swaggerParameterToSchema(param),
+        this.getAllSchemas()
+      );
       return {
         name: param.name,
         type,
         in: param.in,
         required: param.required || false,
         description: param.description,
-        schema: param.schema
+        schema: swaggerParameterToSchema(param)
       };
     });
 
@@ -190,7 +191,6 @@ export class SwaggerParser {
 
     // Debug log
     console.log('解析类型定义...');
-    console.log('Has definitions:', !!this.document.definitions);
     console.log('Has components:', !!this.document.components);
     if (this.document.components) {
       console.log('Has schemas:', !!this.document.components.schemas);
@@ -202,16 +202,7 @@ export class SwaggerParser {
       }
     }
 
-    // 解析 Swagger 2.0 definitions
-    if (this.document.definitions) {
-      for (const [name, schema] of Object.entries(this.document.definitions)) {
-        const sanitizedName = sanitizeTypeName(name); // Use it
-        const typeInfo = this.parseTypeDefinition(sanitizedName, schema);
-        types.push(typeInfo);
-      }
-    }
-
-    // 解析 OpenAPI 3.0 components.schemas
+    // 解析 OpenAPI 3.x components.schemas
     if (this.document.components?.schemas) {
       for (const [name, schema] of Object.entries(
         this.document.components.schemas
@@ -296,6 +287,29 @@ export class SwaggerParser {
   }
 
   /**
+   * 解析本地 $ref 引用对象
+   * @param value 可能带有 $ref 的对象
+   * @returns 引用解析后的对象
+   */
+  private resolveReference<T>(value: T): T {
+    if (!value || !(value as any).$ref) {
+      return value;
+    }
+
+    const refPath = (value as any).$ref.replace(/^#\//, '').split('/');
+    let current: any = this.document;
+
+    for (const segment of refPath) {
+      current = current?.[segment];
+      if (!current) {
+        return value;
+      }
+    }
+
+    return current as T;
+  }
+
+  /**
    * 按标签分组API
    * @param apis API接口数组
    * @returns 按标签分组的API映射
@@ -359,12 +373,24 @@ export class SwaggerParser {
    * @returns 基础URL字符串
    */
   getBaseUrl(): string {
-    if (this.document.host) {
-      const scheme = this.document.schemes?.[0] || 'https';
-      const basePath = this.document.basePath || '';
-      return `${scheme}://${this.document.host}${basePath}`;
-    }
-    return '';
+    const server = this.document.servers?.[0];
+    if (!server) return '';
+
+    return this.resolveServerUrl(server);
+  }
+
+  /**
+   * 解析 OpenAPI server 地址
+   * @param server OpenAPI server 对象
+   * @returns 替换默认变量后的 server URL
+   */
+  private resolveServerUrl(server: { url: string; variables?: any }): string {
+    if (!server.variables) return server.url;
+
+    return server.url.replace(/\{([^}]+)\}/g, (match, name) => {
+      const variable = server.variables?.[name];
+      return variable?.default ?? match;
+    });
   }
 
   /**
