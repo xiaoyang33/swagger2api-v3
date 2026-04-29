@@ -120,4 +120,25 @@ describe('generator', () => {
     const apiFile = path.join(tmp, 'api.ts');
     expect(fs.existsSync(apiFile)).toBe(true);
   });
+
+  test('uses custom headerComment for generated files', async () => {
+    const tmp = mkProjectTemp('gen-header');
+    const config = createBaseConfig(tmp);
+    config.headerComment = '/**\n * Custom generated header\n */';
+
+    const doc = await loadSwaggerDocument(config.input);
+    const parser = new SwaggerParser(doc, config);
+    const apis = parser.parseApis();
+    const types = parser.parseTypes();
+    const grouped = parser.groupApisByTags(apis);
+
+    const gen = new CodeGenerator(config);
+    await gen.generateAll(apis, types, grouped);
+
+    const indexContent = fs.readFileSync(path.join(tmp, 'index.ts'), 'utf-8');
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+
+    expect(indexContent.startsWith(config.headerComment)).toBe(true);
+    expect(typesContent.startsWith(config.headerComment)).toBe(true);
+  });
 });

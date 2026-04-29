@@ -11,14 +11,16 @@
   "files": [
     "dist",
     "README.md",
-    "package.json"
+    "package.json",
+    ".swagger2api.schema.json"
   ],
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
-    "build": "tsc",
+    "build": "tsc && npm run copy:schema",
+    "copy:schema": "node build/copy-schema.js",
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
     "start": "node dist/cli/index.js",

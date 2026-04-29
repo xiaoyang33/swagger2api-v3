@@ -37,7 +37,8 @@ npx swagger2api-v3 init
 
 ```json
 {
-  "input": "https://petstore.swagger.io/v2/swagger.json",
+  "$schema": "./node_modules/swagger2api-v3/dist/.swagger2api.schema.json",
+  "input": "https://petstore3.swagger.io/api/v3/openapi.json",
   "output": "./src/api",
   "importTemplate": "import { request } from '@/utils/request';",
   "generator": "typescript",
@@ -48,6 +49,15 @@ npx swagger2api-v3 init
   "lint": "prettier --write",
   "methodNameIgnorePrefix": [],
   "addMethodSuffix": true,
+  "headerComment": "",
+  "filter": {
+    "include": {
+      "tags": []
+    },
+    "exclude": {
+      "tags": []
+    }
+  },
   "options": {
     "addComments": true
   }
@@ -64,6 +74,7 @@ npx swagger2api-v3 generate
 
 | 选项                     | 类型                  | 默认值         | 说明                                                                                                                             |
 | ------------------------ | --------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `$schema`                | string                | -              | 本地 JSON Schema 路径，用于编辑器自动补全，默认指向 `node_modules/swagger2api-v3/dist/.swagger2api.schema.json`                  |
 | `input`                  | string                | -              | Swagger JSON 文件路径或 URL                                                                                                      |
 | `output`                 | string                | `'./src/api'`  | 生成代码的输出目录                                                                                                               |
 | `generator`              | string                | `'typescript'` | 代码生成器类型，支持 `'typescript'` 和 `'javascript'`。设置 `'javascript'` 时输出 `.js` 文件，并且不生成类型文件                 |
@@ -75,6 +86,9 @@ npx swagger2api-v3 generate
 | `lint`                   | string                | -              | 代码格式化命令（可选）                                                                                                           |
 | `methodNameIgnorePrefix` | string[]              | `[]`           | 生成方法名时需要忽略的前缀数组。例如，配置 `['api', 'auth']` 后，`apiGetName` 会变成 `getName`，`authUserInfo` 会变成 `userInfo` |
 | `addMethodSuffix`        | boolean               | `true`         | 是否在生成的方法名中添加 HTTP method 后缀。`true` 时生成如 `userListPost`，`false` 时生成如 `userList`                           |
+| `headerComment`          | string                | -              | 自定义生成的 `types`、API 和入口文件头部注释                                                                                     |
+| `filter.include.tags`    | string[]              | `[]`           | 只生成匹配这些 tag 的接口。为空时表示包含全部接口                                                                                |
+| `filter.exclude.tags`    | string[]              | `[]`           | 跳过匹配这些 tag 的接口。排除规则优先级高于包含规则                                                                              |
 | `options.addComments`    | boolean               | `true`         | 是否添加详细注释                                                                                                                 |
 
 ## 📁 生成的文件结构

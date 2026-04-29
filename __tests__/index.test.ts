@@ -55,4 +55,31 @@ describe('index (integration)', () => {
     await generate(config);
     expect(fs.existsSync(path.join(out, 'index.js'))).toBe(true);
   });
+
+  test('generate filters APIs by include and exclude tags', async () => {
+    const out = mkTmp('s2a-filter-');
+    const config: SwaggerConfig = {
+      input: createSampleOpenAPIFile(),
+      output: out,
+      generator: 'typescript',
+      groupByTags: true,
+      requestStyle: 'generic',
+      filter: {
+        include: {
+          tags: ['AuthController', 'UserController']
+        },
+        exclude: {
+          tags: ['AuthController']
+        }
+      }
+    } as any;
+
+    await generate(config);
+
+    expect(fs.existsSync(path.join(out, 'userController', 'index.ts'))).toBe(
+      true
+    );
+    expect(fs.existsSync(path.join(out, 'authController'))).toBe(false);
+    expect(fs.existsSync(path.join(out, 'roleController'))).toBe(false);
+  });
 });

@@ -6,6 +6,8 @@
  * Swagger配置接口
  */
 export interface SwaggerConfig {
+  /** 本地 JSON Schema 路径，用于编辑器提示 */
+  $schema?: string;
   /** Swagger JSON 文件路径或 URL */
   input: string;
   /** 输出目录 */
@@ -34,6 +36,28 @@ export interface SwaggerConfig {
   methodNameIgnorePrefix?: string[];
   /** 是否在生成的方法名中添加 HTTP method 后缀，默认为 true。true: userListPost, false: userList */
   addMethodSuffix?: boolean;
+  /** 接口过滤配置 */
+  filter?: FilterConfig;
+  /** 自定义生成文件头部注释 */
+  headerComment?: string;
+}
+
+/**
+ * 接口过滤配置
+ */
+export interface FilterConfig {
+  /** 包含规则 */
+  include?: TagFilterConfig;
+  /** 排除规则 */
+  exclude?: TagFilterConfig;
+}
+
+/**
+ * 标签过滤配置
+ */
+export interface TagFilterConfig {
+  /** 需要匹配的标签名称 */
+  tags?: string[];
 }
 
 /**
@@ -41,11 +65,11 @@ export interface SwaggerConfig {
  */
 export interface TagGroupingConfig {
   /** 启用标签分组 */
-  enabled: boolean;
+  enabled?: boolean;
   /** 为每个标签创建子目录 */
-  createSubDirectories: boolean;
+  createSubDirectories?: boolean;
   /** 文件命名方式 */
-  fileNaming: 'tag' | 'kebab-case' | 'camelCase';
+  fileNaming?: 'tag' | 'kebab-case' | 'camelCase';
 }
 
 /**
@@ -53,17 +77,17 @@ export interface TagGroupingConfig {
  */
 export interface GenerationOptions {
   /** 是否生成数据模型 */
-  generateModels: boolean;
+  generateModels?: boolean;
   /** 是否生成 API 接口 */
-  generateApis: boolean;
+  generateApis?: boolean;
   /** 是否生成入口文件 */
-  generateIndex: boolean;
+  generateIndex?: boolean;
   /** 是否使用 Axios */
-  useAxios: boolean;
+  useAxios?: boolean;
   /** 是否添加详细注释 */
-  addComments: boolean;
+  addComments?: boolean;
   /** 是否格式化代码 */
-  prettify: boolean;
+  prettify?: boolean;
 }
 
 /**
@@ -71,13 +95,13 @@ export interface GenerationOptions {
  */
 export interface CommentConfig {
   /** 包含接口描述 */
-  includeDescription: boolean;
+  includeDescription?: boolean;
   /** 包含参数信息 */
-  includeParameters: boolean;
+  includeParameters?: boolean;
   /** 包含返回值信息 */
-  includeResponses: boolean;
+  includeResponses?: boolean;
   /** 包含示例 */
-  includeExamples: boolean;
+  includeExamples?: boolean;
 }
 
 /**

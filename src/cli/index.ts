@@ -73,6 +73,7 @@ program
     }
 
     const config = {
+      $schema: './node_modules/swagger2api-v3/dist/.swagger2api.schema.json',
       input: 'http://localhost:3000/admin/docs/json',
       output: './src/api',
       importTemplate: "import { request } from '@/utils/request';",
@@ -84,6 +85,15 @@ program
       lint: 'prettier --write',
       methodNameIgnorePrefix: [],
       addMethodSuffix: true,
+      headerComment: '',
+      filter: {
+        include: {
+          tags: []
+        },
+        exclude: {
+          tags: []
+        }
+      },
       options: {
         addComments: true
       }

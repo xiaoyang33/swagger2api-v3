@@ -1,0 +1,120 @@
+{
+  "title": "swagger2api-v3 config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["input", "output", "generator", "groupByTags"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "本地 JSON Schema 路径，用于编辑器提示"
+    },
+    "input": {
+      "type": "string",
+      "description": "OpenAPI JSON 文件路径或 URL"
+    },
+    "output": {
+      "type": "string",
+      "description": "生成代码输出目录"
+    },
+    "generator": {
+      "enum": ["typescript", "javascript"],
+      "description": "生成器类型"
+    },
+    "groupByTags": {
+      "type": "boolean",
+      "description": "是否按 tags 分组生成文件"
+    },
+    "overwrite": {
+      "type": "boolean",
+      "description": "生成前是否覆盖输出目录"
+    },
+    "prefix": {
+      "type": "string",
+      "description": "接口路径公共前缀"
+    },
+    "requestStyle": {
+      "enum": ["method", "generic"],
+      "description": "请求调用风格"
+    },
+    "importTemplate": {
+      "type": "string",
+      "description": "request 导入语句"
+    },
+    "lint": {
+      "type": "string",
+      "description": "生成后执行的格式化命令"
+    },
+    "methodNameIgnorePrefix": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "生成方法名时需要忽略的前缀"
+    },
+    "addMethodSuffix": {
+      "type": "boolean",
+      "description": "是否在方法名中追加 HTTP method 后缀"
+    },
+    "headerComment": {
+      "type": "string",
+      "description": "自定义生成文件头部注释"
+    },
+    "filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "exclude": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "tagGrouping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "createSubDirectories": { "type": "boolean" },
+        "fileNaming": {
+          "enum": ["tag", "kebab-case", "camelCase"]
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generateModels": { "type": "boolean" },
+        "generateApis": { "type": "boolean" },
+        "generateIndex": { "type": "boolean" },
+        "useAxios": { "type": "boolean" },
+        "addComments": { "type": "boolean" },
+        "prettify": { "type": "boolean" }
+      }
+    },
+    "comments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includeDescription": { "type": "boolean" },
+        "includeParameters": { "type": "boolean" },
+        "includeResponses": { "type": "boolean" },
+        "includeExamples": { "type": "boolean" }
+      }
+    }
+  }
+}

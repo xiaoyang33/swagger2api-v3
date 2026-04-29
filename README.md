@@ -37,7 +37,8 @@ The tool generates a `.swagger.config.json` configuration file:
 
 ```json
 {
-  "input": "https://petstore.swagger.io/v2/swagger.json",
+  "$schema": "./node_modules/swagger2api-v3/dist/.swagger2api.schema.json",
+  "input": "https://petstore3.swagger.io/api/v3/openapi.json",
   "output": "./src/api",
   "importTemplate": "import { request } from '@/utils/request';",
   "generator": "typescript",
@@ -48,6 +49,15 @@ The tool generates a `.swagger.config.json` configuration file:
   "lint": "prettier --write",
   "methodNameIgnorePrefix": [],
   "addMethodSuffix": true,
+  "headerComment": "",
+  "filter": {
+    "include": {
+      "tags": []
+    },
+    "exclude": {
+      "tags": []
+    }
+  },
   "options": {
     "addComments": true
   }
@@ -64,6 +74,7 @@ npx swagger2api-v3 generate
 
 | Option                   | Type                  | Default        | Description                                                                                                                                                        |
 | ------------------------ | --------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `$schema`                | string                | -              | Local JSON Schema path for editor completion. The default points to `node_modules/swagger2api-v3/dist/.swagger2api.schema.json`                                    |
 | `input`                  | string                | -              | Swagger JSON file path or URL                                                                                                                                      |
 | `output`                 | string                | `'./src/api'`  | Output directory for generated code                                                                                                                                |
 | `generator`              | string                | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation                                 |
@@ -75,6 +86,9 @@ npx swagger2api-v3 generate
 | `lint`                   | string                | -              | Code formatting command (optional)                                                                                                                                 |
 | `methodNameIgnorePrefix` | string[]              | `[]`           | Array of prefixes to ignore when generating method names. For example, `['api', 'auth']` will transform `apiGetName` to `getName` and `authUserInfo` to `userInfo` |
 | `addMethodSuffix`        | boolean               | `true`         | Whether to add HTTP method suffix to generated function names. `true` generates `userListPost`, `false` generates `userList`                                       |
+| `headerComment`          | string                | -              | Custom header comment for generated `types`, API, and index files                                                                                                  |
+| `filter.include.tags`    | string[]              | `[]`           | Only generate APIs whose tags match this list. Empty means include all                                                                                             |
+| `filter.exclude.tags`    | string[]              | `[]`           | Skip APIs whose tags match this list. Exclude rules take priority over include rules                                                                               |
 | `options.addComments`    | boolean               | `true`         | Whether to add detailed comments                                                                                                                                   |
 
 ## 📁 Generated File Structure

@@ -86,13 +86,12 @@ export class CodeGenerator {
    * @returns 类型文件内容
    */
   private generateTypesContent(types: TypeInfo[]): string {
-    const header = [
+    const header = this.generateHeader([
       '/**',
       ' * API 类型定义',
       ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
-      ' */',
-      ''
-    ].join('\n');
+      ' */'
+    ]);
 
     const typeDefinitions = types
       .map((type) => {
@@ -116,7 +115,7 @@ export class CodeGenerator {
       })
       .join('\n\n');
 
-    return `${header}${typeDefinitions}\n`;
+    return `${header}\n\n${typeDefinitions}\n`;
   }
 
   /**
@@ -175,11 +174,12 @@ export class CodeGenerator {
       this.config.importTemplate || "import { request } from '@/utils'";
 
     const header = [
-      '/**',
-      ` * ${tag ? `${tag} ` : ''}API 接口`,
-      ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
-      ' */',
-      '',
+      this.generateHeader([
+        '/**',
+        ` * ${tag ? `${tag} ` : ''}API 接口`,
+        ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
+        ' */'
+      ]),
       importTemplate + ';'
     ];
 
@@ -534,15 +534,7 @@ export class CodeGenerator {
       exports.push("export * from './api';");
     }
 
-    const content = [
-      '/**',
-      ' * API 入口文件',
-      ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
-      ' */',
-      '',
-      ...exports,
-      ''
-    ].join('\n');
+    const content = [this.generateHeader(), '', ...exports, ''].join('\n');
 
     const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
     const filePath = path.join(this.config.output, `index.${ext}`);
@@ -567,6 +559,22 @@ export class CodeGenerator {
       default:
         return toCamelCase(cleanTag);
     }
+  }
+
+  /**
+   * 生成文件头部注释
+   * @param defaultHeader 默认头部注释
+   * @returns 文件头部注释内容
+   */
+  private generateHeader(
+    defaultHeader: string[] = [
+      '/**',
+      ' * API 入口文件',
+      ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
+      ' */'
+    ]
+  ): string {
+    return this.config.headerComment?.trim() || defaultHeader.join('\n');
   }
 
   /**

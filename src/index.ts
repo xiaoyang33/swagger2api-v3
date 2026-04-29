@@ -1,9 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { SwaggerConfig } from './types';
+import { ApiInfo, SwaggerConfig } from './types';
 import { SwaggerParser } from './core/parser';
 import { CodeGenerator } from './core/generator';
 import { loadSwaggerDocument } from './utils';
+import { validateSwaggerConfig } from './config/validator';
 
 /**
  * Swagger2API 主类
@@ -37,7 +38,7 @@ export class Swagger2API {
       // 2. 解析文档
       console.log('🔍 解析API接口...');
       const parser = new SwaggerParser(document, this.config);
-      const apis = parser.parseApis();
+      const apis = this.filterApis(parser.parseApis());
       const types = parser.parseTypes();
       const groupedApis = parser.groupApisByTags(apis);
 
@@ -66,23 +67,7 @@ export class Swagger2API {
    * 验证配置
    */
   validateConfig(): boolean {
-    const errors: string[] = [];
-
-    if (!this.config.input) {
-      errors.push('input 配置项不能为空');
-    }
-
-    if (!this.config.output) {
-      errors.push('output 配置项不能为空');
-    }
-
-    // 支持 typescript 与 javascript 两种生成器
-    if (
-      this.config.generator !== 'typescript' &&
-      this.config.generator !== 'javascript'
-    ) {
-      errors.push('目前只支持 typescript 或 javascript 生成器');
-    }
+    const errors = validateSwaggerConfig(this.config);
 
     if (errors.length > 0) {
       console.error('❌ 配置验证失败:');
@@ -91,6 +76,30 @@ export class Swagger2API {
     }
 
     return true;
+  }
+
+  /**
+   * 根据配置过滤 API
+   * @param apis API接口数组
+   * @returns 过滤后的 API接口数组
+   */
+  private filterApis(apis: ApiInfo[]): ApiInfo[] {
+    const includeTags = this.config.filter?.include?.tags;
+    const excludeTags = this.config.filter?.exclude?.tags;
+
+    if (!includeTags?.length && !excludeTags?.length) {
+      return apis;
+    }
+
+    return apis.filter((api) => {
+      const tags = api.tags || [];
+      const included =
+        !includeTags?.length || tags.some((tag) => includeTags.includes(tag));
+      const excluded =
+        !!excludeTags?.length && tags.some((tag) => excludeTags.includes(tag));
+
+      return included && !excluded;
+    });
   }
 }
 
