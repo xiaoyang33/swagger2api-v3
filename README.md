@@ -2,12 +2,12 @@
 
 English | [中文](./README_CN.md)
 
-A powerful command-line tool for automatically generating TypeScript or JavaScript interface code from OpenAPI 3.0 documentation.
+A powerful command-line tool for automatically generating TypeScript or JavaScript interface code from OpenAPI 3.x / Swagger 3.0 documentation.
 
 ## ✨ Features
 
-- 🚀 **Fast Generation** - Quickly generate TypeScript interface code from Swagger JSON
-- 📁 **Smart Grouping** - Support automatic file grouping by Swagger tags
+- 🚀 **Fast Generation** - Quickly generate TypeScript interface code from OpenAPI/Swagger 3.0 JSON
+- 📁 **Smart Grouping** - Support automatic file grouping by document tags
 - 📝 **Detailed Comments** - Automatically generate detailed comments including descriptions, parameters, and return values
 - 🎨 **Code Formatting** - Support custom formatting commands
 - ⚙️ **Environment Adaptation** - Automatically detect project environment and generate corresponding configuration files
@@ -75,7 +75,7 @@ npx swagger2api-v3 generate
 | Option                   | Type                  | Default        | Description                                                                                                                                                        |
 | ------------------------ | --------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `$schema`                | string                | -              | Local JSON Schema path for editor completion. The default points to `node_modules/swagger2api-v3/dist/.swagger2api.schema.json`                                    |
-| `input`                  | string                | -              | Swagger JSON file path or URL                                                                                                                                      |
+| `input`                  | string                | -              | OpenAPI/Swagger 3.0 JSON file path or URL                                                                                                                          |
 | `output`                 | string                | `'./src/api'`  | Output directory for generated code                                                                                                                                |
 | `generator`              | string                | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation                                 |
 | `groupByTags`            | boolean               | `true`         | Whether to group files by tags                                                                                                                                     |

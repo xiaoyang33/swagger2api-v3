@@ -129,6 +129,29 @@ describe('parser', () => {
     expect(def).not.toContain('reqAnyNull: any | null;');
   });
 
+  test('parseTypes supports numeric enum values', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Status: {
+            type: 'integer',
+            enum: [0, 1]
+          }
+        }
+      }
+    };
+
+    const parser = new SwaggerParser(doc as any, config);
+    const types = parser.parseTypes();
+    const status = types.find((type) => type.name === 'Status');
+
+    expect(status?.definition).toContain("VALUE_0 = '0'");
+    expect(status?.definition).toContain("VALUE_1 = '1'");
+  });
+
   test('parseApis supports OpenAPI refs and non-json requestBody content', () => {
     const doc = {
       openapi: '3.0.0',

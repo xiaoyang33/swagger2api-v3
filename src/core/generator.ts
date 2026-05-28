@@ -1,16 +1,19 @@
 import * as path from 'path';
-import { SwaggerConfig, ApiInfo, TypeInfo } from '../types';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { SwaggerConfig, ApiInfo, TypeInfo, SwaggerSchema } from '../types';
 import {
   writeFile,
   ensureDirectoryExists,
   removeDirectory,
   generateApiComment,
-  generateParameterTypes,
   sanitizeFilename,
   toKebabCase,
   toCamelCase,
   swaggerTypeToTsType
 } from '../utils';
+
+const execPromise = promisify(exec);
 
 /**
  * 代码生成器
@@ -332,7 +335,7 @@ export class CodeGenerator {
    * @param schema Swagger schema
    * @returns 类型字符串
    */
-  private getTypeFromSchema(schema: any): string {
+  private getTypeFromSchema(schema: SwaggerSchema): string {
     return swaggerTypeToTsType(schema);
   }
 
@@ -584,10 +587,6 @@ export class CodeGenerator {
     if (!this.config.lint) return;
 
     try {
-      const { exec } = require('child_process');
-      const util = require('util');
-      const execPromise = util.promisify(exec);
-
       console.log(
         `🎨 Running lint command: ${this.config.lint} ${this.config.output}`
       );

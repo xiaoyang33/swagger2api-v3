@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a TypeScript CLI package that generates API code from Swagger/OpenAPI documents. Source files live in `src/`: `src/index.ts` exposes the main API, `src/cli/` contains command-line entry points, `src/core/` contains parsing and code generation logic, `src/types/` defines shared types, and `src/utils/` holds reusable helpers. Tests live in `__tests__/` and use helpers from `__tests__/helpers.ts`. Build output is emitted to `dist/`; do not edit generated files there. `swagger_temp.json` is sample/input data for local generation work.
+This repository is a TypeScript CLI package that generates API code from OpenAPI 3.x / Swagger 3.0 documents. Source files live in `src/`: `src/index.ts` exposes the main API, `src/cli/` contains command-line entry points, `src/core/` contains parsing and code generation logic, `src/types/` defines shared types, and `src/utils/` holds reusable helpers. Tests live in `__tests__/` and use helpers from `__tests__/helpers.ts`. Build output is emitted to `dist/`; do not edit generated files there. `swagger_temp.json` is sample/input data for local generation work.
 
 ## Build, Test, and Development Commands
 

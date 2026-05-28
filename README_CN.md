@@ -2,12 +2,12 @@
 
 中文 | [English](./README.md)
 
-一个强大的命令行工具，用于从 OpenAPI 3.0 文档自动生成 TypeScript 或 JavaScript 接口代码。
+一个强大的命令行工具，用于从 OpenAPI 3.x / Swagger 3.0 文档自动生成 TypeScript 或 JavaScript 接口代码。
 
 ## ✨ 特性
 
-- 🚀 **快速生成** - 从 Swagger JSON 快速生成 TypeScript 接口代码
-- 📁 **智能分组** - 支持按 Swagger 标签自动分组生成文件
+- 🚀 **快速生成** - 从 OpenAPI/Swagger 3.0 JSON 快速生成 TypeScript 接口代码
+- 📁 **智能分组** - 支持按文档 tags 自动分组生成文件
 - 📝 **详细注释** - 自动生成包含描述、参数、返回值的详细注释
 - 🎨 **代码格式化** - 支持自定义格式化命令
 - ⚙️ **环境适配** - 自动检测项目环境，生成对应格式的配置文件
@@ -75,7 +75,7 @@ npx swagger2api-v3 generate
 | 选项                     | 类型                  | 默认值         | 说明                                                                                                                             |
 | ------------------------ | --------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `$schema`                | string                | -              | 本地 JSON Schema 路径，用于编辑器自动补全，默认指向 `node_modules/swagger2api-v3/dist/.swagger2api.schema.json`                  |
-| `input`                  | string                | -              | Swagger JSON 文件路径或 URL                                                                                                      |
+| `input`                  | string                | -              | OpenAPI/Swagger 3.0 JSON 文件路径或 URL                                                                                          |
 | `output`                 | string                | `'./src/api'`  | 生成代码的输出目录                                                                                                               |
 | `generator`              | string                | `'typescript'` | 代码生成器类型，支持 `'typescript'` 和 `'javascript'`。设置 `'javascript'` 时输出 `.js` 文件，并且不生成类型文件                 |
 | `groupByTags`            | boolean               | `true`         | 是否按标签分组生成文件                                                                                                           |

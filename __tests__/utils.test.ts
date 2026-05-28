@@ -11,7 +11,6 @@ import {
   swaggerTypeToTsType,
   getResponseType,
   getSchemaFromContent,
-  generateParameterTypes,
   ensureDirectoryExists,
   removeDirectory,
   writeFile,
@@ -199,29 +198,6 @@ describe('utils', () => {
         }
       })
     ).toEqual({ type: 'object' });
-  });
-
-  test('generateParameterTypes builds types from parameters', () => {
-    const params = [
-      { name: 'id', in: 'path', required: true, type: 'string' },
-      {
-        name: 'tags',
-        in: 'query',
-        required: false,
-        type: 'array',
-        items: { type: 'string' }
-      },
-      {
-        name: 'body',
-        in: 'body',
-        required: true,
-        schema: { $ref: '#/components/schemas/LoginDto' }
-      }
-    ] as any;
-    const result = generateParameterTypes(params);
-    expect(result).toContain('pathParams: { id: string }');
-    expect(result).toContain('queryParams?: { tags?: string[] }');
-    expect(result).toContain('data: LoginDto');
   });
 
   test('ensureDirectoryExists, writeFile, removeDirectory', () => {

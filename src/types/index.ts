@@ -296,6 +296,10 @@ export interface SwaggerSchema {
   externalDocs?: SwaggerExternalDocs;
   nullable?: boolean;
   deprecated?: boolean;
+  /** OpenAPI 扩展字段：枚举变量名 */
+  'x-enum-varnames'?: string[];
+  /** OpenAPI 扩展字段：枚举名称 */
+  'x-enumNames'?: string[];
 }
 
 /**

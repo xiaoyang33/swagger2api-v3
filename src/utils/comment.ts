@@ -1,14 +1,31 @@
-import { SwaggerParameter } from '../types';
+import { ParameterInfo } from '../types';
+
+/**
+ * 注释生成需要的操作信息
+ */
+export interface ApiCommentOperation {
+  /** 接口摘要 */
+  summary?: string;
+  /** 接口描述 */
+  description?: string;
+  /** 是否废弃 */
+  deprecated?: boolean;
+}
+
+/**
+ * 注释生成需要的参数信息
+ */
+export type ApiCommentParameter = Pick<ParameterInfo, 'in' | 'description'>;
 
 /**
  * 生成接口注释
- * @param operation Swagger操作对象
+ * @param operation 接口操作信息
  * @param parameters 参数列表
  * @returns 注释字符串
  */
 export function generateApiComment(
-  operation: any,
-  parameters: SwaggerParameter[]
+  operation: ApiCommentOperation,
+  parameters: ApiCommentParameter[]
 ): string {
   const comments: string[] = ['/**'];
 
