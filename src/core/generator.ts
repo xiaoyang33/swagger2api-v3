@@ -526,15 +526,17 @@ export class CodeGenerator {
       exports.push("export * from './types';");
     }
 
-    if (this.config.groupByTags) {
-      // 按标签导出
-      for (const tag of groupedApis.keys()) {
-        const folderName = this.getTagFileName(tag);
-        exports.push(`export * from './${folderName}';`);
+    if (this.config.options?.generateApis !== false) {
+      if (this.config.groupByTags) {
+        // 按标签导出
+        for (const tag of groupedApis.keys()) {
+          const folderName = this.getTagFileName(tag);
+          exports.push(`export * from './${folderName}';`);
+        }
+      } else {
+        // 导出单个API文件
+        exports.push("export * from './api';");
       }
-    } else {
-      // 导出单个API文件
-      exports.push("export * from './api';");
     }
 
     const content = [this.generateHeader(), '', ...exports, ''].join('\n');

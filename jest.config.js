@@ -9,9 +9,7 @@ module.exports = {
   clearMocks: true,
   coverageDirectory: 'coverage',
   collectCoverageFrom: ['src/**/*.{ts,tsx}'],
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.json'
-    }
+  transform: {
+    '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }]
   }
 };

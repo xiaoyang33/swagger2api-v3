@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateFromConfig } from '../src/index';
 import { SwaggerConfig } from '../src/types';
+import { createSampleOpenAPIFile } from './helpers';
 
 describe('JSON Config Loading', () => {
   const tempDir = path.resolve(__dirname, '../temp');
@@ -21,7 +21,7 @@ describe('JSON Config Loading', () => {
 
   test('should load valid JSON config', () => {
     const config: SwaggerConfig = {
-      input: path.resolve(__dirname, '../swagger_temp.json'),
+      input: createSampleOpenAPIFile(),
       output: path.join(tempDir, 'api'),
       generator: 'typescript',
       groupByTags: true
@@ -82,7 +82,6 @@ describe('JSON Config Loading', () => {
   });
 
   test('should parse JSON with comments stripped (if using json5 or similar)', () => {
-    // Standard JSON doesn't support comments, but this tests the basic structure
     const config = {
       input: 'http://localhost:3000/api/docs',
       output: './src/api',
@@ -113,5 +112,44 @@ describe('JSON Config Loading', () => {
       }
     );
     expect(schema.properties.headerComment.type).toBe('string');
+  });
+
+  test('should validate required fields in loaded config', () => {
+    const incompleteConfigs = [
+      { output: './src/api', generator: 'typescript', groupByTags: true },
+      { input: './api.json', generator: 'typescript', groupByTags: true },
+      { input: './api.json', output: './src/api', groupByTags: true },
+      { input: './api.json', output: './src/api', generator: 'typescript' }
+    ];
+
+    const requiredFields = ['input', 'output', 'generator', 'groupByTags'];
+
+    incompleteConfigs.forEach((config) => {
+      const missing = requiredFields.find(
+        (field) => !(field in config)
+      );
+      expect(missing).toBeDefined();
+    });
+  });
+
+  test('should roundtrip config with filter and tagGrouping', () => {
+    const config = {
+      input: './api.json',
+      output: './src/api',
+      generator: 'typescript' as const,
+      groupByTags: true,
+      filter: {
+        include: { tags: ['User', 'Admin'] },
+        exclude: { tags: ['Internal'] }
+      },
+      tagGrouping: { enabled: true, fileNaming: 'kebab-case' as const }
+    };
+
+    fs.writeFileSync(testConfigPath, JSON.stringify(config, null, 2), 'utf-8');
+    const loaded = JSON.parse(fs.readFileSync(testConfigPath, 'utf-8'));
+
+    expect(loaded.filter.include.tags).toEqual(['User', 'Admin']);
+    expect(loaded.filter.exclude.tags).toEqual(['Internal']);
+    expect(loaded.tagGrouping.fileNaming).toBe('kebab-case');
   });
 });
