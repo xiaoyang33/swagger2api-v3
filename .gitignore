@@ -26,3 +26,4 @@ src/api
 .trae
 temp/
 coverage/
+.claude
