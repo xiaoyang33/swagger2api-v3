@@ -44,6 +44,7 @@ npx swagger2api-v3 init
   "generator": "typescript",
   "requestStyle": "generic",
   "groupByTags": true,
+  "multiTagStrategy": "first",
   "overwrite": true,
   "prefix": "",
   "lint": "prettier --write",
@@ -79,6 +80,7 @@ npx swagger2api-v3 generate
 | `output`                 | string                | `'./src/api'`  | 生成代码的输出目录                                                                                                               |
 | `generator`              | string                | `'typescript'` | 代码生成器类型，支持 `'typescript'` 和 `'javascript'`。设置 `'javascript'` 时输出 `.js` 文件，并且不生成类型文件                 |
 | `groupByTags`            | boolean               | `true`         | 是否按标签分组生成文件                                                                                                           |
+| `multiTagStrategy`       | 'first' \| 'all'      | `'first'`      | 多 tag 接口分组策略。`first` 只使用第一个 tag，`all` 将所有 tags 合成一个分组名称                                             |
 | `overwrite`              | boolean               | `true`         | 是否覆盖已存在的文件                                                                                                             |
 | `prefix`                 | string                | `''`           | 接口路径公共前缀                                                                                                                 |
 | `importTemplate`         | string                | -              | request 函数导入语句模板                                                                                                         |

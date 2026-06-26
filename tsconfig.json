@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "node20",
     "lib": ["ES2020"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -14,7 +14,8 @@
     "sourceMap": false,
     "removeComments": false,
     "noImplicitAny": true,
-    "moduleResolution": "node",
+    "isolatedModules": true,
+    "types": ["node", "jest"],
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true
   },

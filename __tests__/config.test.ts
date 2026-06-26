@@ -1,16 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { SwaggerConfig } from '../src/types';
-import { createSampleOpenAPIFile } from './helpers';
+import { validateSwaggerConfig } from '../src/config/validator';
+import { createCleanProjectTemp, createSampleOpenAPIFile } from './helpers';
 
 describe('JSON Config Loading', () => {
-  const tempDir = path.resolve(__dirname, '../temp');
+  const tempDir = createCleanProjectTemp('config');
   const testConfigPath = path.join(tempDir, 'test.config.json');
 
   beforeEach(() => {
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+    fs.mkdirSync(tempDir, { recursive: true });
   });
 
   afterEach(() => {
@@ -37,7 +36,7 @@ describe('JSON Config Loading', () => {
     expect(loadedConfig.generator).toBe('typescript');
   });
 
-  test('should handle invalid JSON gracefully', () => {
+  test('should throw SyntaxError when config JSON is invalid', () => {
     const invalidJson = '{ "input": "test", invalid }';
     fs.writeFileSync(testConfigPath, invalidJson, 'utf-8');
 
@@ -81,7 +80,7 @@ describe('JSON Config Loading', () => {
     expect(fs.existsSync(nonExistentPath)).toBe(false);
   });
 
-  test('should parse JSON with comments stripped (if using json5 or similar)', () => {
+  test('should parse plain JSON config', () => {
     const config = {
       input: 'http://localhost:3000/api/docs',
       output: './src/api',
@@ -114,22 +113,15 @@ describe('JSON Config Loading', () => {
     expect(schema.properties.headerComment.type).toBe('string');
   });
 
-  test('should validate required fields in loaded config', () => {
-    const incompleteConfigs = [
-      { output: './src/api', generator: 'typescript', groupByTags: true },
-      { input: './api.json', generator: 'typescript', groupByTags: true },
-      { input: './api.json', output: './src/api', groupByTags: true },
-      { input: './api.json', output: './src/api', generator: 'typescript' }
-    ];
+  test.each([
+    ['input', { output: './src/api', generator: 'typescript', groupByTags: true }],
+    ['output', { input: './api.json', generator: 'typescript', groupByTags: true }],
+    ['generator', { input: './api.json', output: './src/api', groupByTags: true }],
+    ['groupByTags', { input: './api.json', output: './src/api', generator: 'typescript' }]
+  ])('should validate missing required field %s', (field, config) => {
+    const errors = validateSwaggerConfig(config as any);
 
-    const requiredFields = ['input', 'output', 'generator', 'groupByTags'];
-
-    incompleteConfigs.forEach((config) => {
-      const missing = requiredFields.find(
-        (field) => !(field in config)
-      );
-      expect(missing).toBeDefined();
-    });
+    expect(errors.some((error) => error.includes(field))).toBe(true);
   });
 
   test('should roundtrip config with filter and tagGrouping', () => {

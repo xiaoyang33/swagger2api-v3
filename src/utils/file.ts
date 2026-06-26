@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import { SwaggerDocument } from '../types';
+import { logger } from './logger';
 
 /**
  * 确保目录存在，如果不存在则创建
@@ -34,11 +35,14 @@ export async function loadSwaggerDocument(
   try {
     if (input.startsWith('http://') || input.startsWith('https://')) {
       const { data } = await axios.get(input);
-      console.log('Loaded from URL:', input);
+      logger.debug(`从 URL 加载: ${input}`);
       if (data.components?.schemas) {
-        console.log('Schemas count:', Object.keys(data.components.schemas).length);
+        logger.debugKV(
+          'schemas 数量',
+          Object.keys(data.components.schemas).length
+        );
       } else {
-        console.log('No schemas in loaded data');
+        logger.debug('加载的数据中未发现 schemas');
       }
       return data;
     }

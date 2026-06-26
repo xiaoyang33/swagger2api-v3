@@ -24,6 +24,10 @@
       "type": "boolean",
       "description": "是否按 tags 分组生成文件"
     },
+    "multiTagStrategy": {
+      "enum": ["first", "all"],
+      "description": "多 tag 接口分组策略。first 只使用第一个 tag，all 将所有 tags 合成一个分组"
+    },
     "overwrite": {
       "type": "boolean",
       "description": "生成前是否覆盖输出目录"

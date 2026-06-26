@@ -2,7 +2,7 @@ import * as path from 'path';
 import { SwaggerParser } from '../src/core/parser';
 import { loadSwaggerDocument } from '../src/utils';
 import { SwaggerConfig } from '../src/types';
-import { createSampleOpenAPIFile } from './helpers';
+import { createOpenApiDoc, createSampleOpenAPIFile } from './helpers';
 
 describe('parser', () => {
   let config: SwaggerConfig;
@@ -139,14 +139,14 @@ describe('parser', () => {
     expect(grouped.get('default')!.length).toBe(1);
   });
 
-  test('groupApisByTags puts multi-tag API into multiple groups', () => {
+  test('groupApisByTags puts multi-tag API into first group by default', () => {
     const doc = {
       openapi: '3.0.0',
       info: { title: 'Test', version: '1.0' },
       paths: {
         '/shared': {
           get: {
-            tags: ['User', 'Admin'],
+            tags: ['User', 'Admin', 'Audit'],
             responses: { 200: { description: 'ok' } }
           }
         }
@@ -157,9 +157,58 @@ describe('parser', () => {
     const apis = parser.parseApis();
     const grouped = parser.groupApisByTags(apis);
     expect(grouped.has('User')).toBe(true);
-    expect(grouped.has('Admin')).toBe(true);
-    // 同一个 API 出现在两个组中
-    expect(grouped.get('User')![0].name).toBe(grouped.get('Admin')![0].name);
+    expect(grouped.has('Admin')).toBe(false);
+    expect(grouped.has('Audit')).toBe(false);
+    expect(grouped.get('User')![0].name).toBe(apis[0].name);
+  });
+
+  test('groupApisByTags combines tags when multiTagStrategy is all', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/shared': {
+          get: {
+            tags: ['User', 'Admin', 'Audit'],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      components: { schemas: {} }
+    };
+    const parser = new SwaggerParser(doc as any, {
+      ...config,
+      multiTagStrategy: 'all'
+    });
+    const apis = parser.parseApis();
+    const grouped = parser.groupApisByTags(apis);
+    expect(grouped.has('User')).toBe(false);
+    expect(grouped.has('Admin')).toBe(false);
+    expect(grouped.has('Audit')).toBe(false);
+    expect(grouped.has('User-Admin-Audit')).toBe(true);
+    expect(grouped.get('User-Admin-Audit')![0].name).toBe(apis[0].name);
+  });
+
+  test('groupApisByTags keeps single tag when multiTagStrategy is all', () => {
+    const doc = createOpenApiDoc({
+      paths: {
+        '/single': {
+          get: {
+            tags: ['Only'],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc as any, {
+      ...config,
+      multiTagStrategy: 'all'
+    });
+    const apis = parser.parseApis();
+    const grouped = parser.groupApisByTags(apis);
+
+    expect(grouped.has('Only')).toBe(true);
+    expect(grouped.get('Only')![0].name).toBe(apis[0].name);
   });
 
   test('parseApis parses deprecated operation without crashing', () => {
@@ -184,8 +233,7 @@ describe('parser', () => {
     expect(apis[0].path).toBe('/old-api');
     expect(apis[0].method).toBe('GET');
     expect(apis[0].description).toBe('旧接口');
-    // 注意：当前 ApiInfo 类型没有 deprecated 字段，
-    // 如果需要将 deprecated 传递到生成器，需要在 ApiInfo 中添加该字段
+    expect(apis[0].deprecated).toBe(true);
   });
 
   test('parseApis handles empty paths', () => {
@@ -323,8 +371,8 @@ describe('parser', () => {
     const types = parser.parseTypes();
     const status = types.find((type) => type.name === 'Status');
 
-    expect(status?.definition).toContain("VALUE_0 = '0'");
-    expect(status?.definition).toContain("VALUE_1 = '1'");
+    expect(status?.definition).toContain('VALUE_0 = "0"');
+    expect(status?.definition).toContain('VALUE_1 = "1"');
   });
 
   test('parseApis supports OpenAPI refs and non-json requestBody content', () => {
@@ -410,5 +458,199 @@ describe('parser', () => {
     );
     expect(api.responseType).toBe('UploadResp[]');
     expect(api.requestBodyType).toBe('UploadDto');
+  });
+
+  test('parseApis resolves nested local refs', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {
+        '/nested/{id}': {
+          get: {
+            parameters: [{ $ref: '#/components/parameters/AliasIdParam' }],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      components: {
+        parameters: {
+          AliasIdParam: { $ref: '#/components/parameters/IdParam' },
+          IdParam: {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' }
+          }
+        },
+        schemas: {}
+      }
+    };
+
+    const parser = new SwaggerParser(doc as any, config);
+    const [api] = parser.parseApis();
+
+    expect(api.parameters).toEqual([
+      expect.objectContaining({ name: 'id', in: 'path', type: 'string' })
+    ]);
+  });
+
+  test('parseApis throws clear error for invalid local refs', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {
+        '/invalid': {
+          get: {
+            parameters: [{ $ref: '#/components/parameters/MissingParam' }],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      components: { parameters: {}, schemas: {} }
+    };
+
+    const parser = new SwaggerParser(doc as any, config);
+
+    expect(() => parser.parseApis()).toThrow(
+      '无法解析 $ref 引用: #/components/parameters/MissingParam'
+    );
+  });
+
+  test('parseApis throws clear error for external refs', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {
+        '/external': {
+          get: {
+            parameters: [{ $ref: './common.json#/components/parameters/Id' }],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      components: { schemas: {} }
+    };
+
+    const parser = new SwaggerParser(doc as any, config);
+
+    expect(() => parser.parseApis()).toThrow(
+      '暂不支持外部 $ref 引用: ./common.json#/components/parameters/Id'
+    );
+  });
+
+  test('parseApis lets operation parameters override path parameters', () => {
+    const doc = createOpenApiDoc({
+      paths: {
+        '/users/{id}': {
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' }
+            }
+          ],
+          get: {
+            parameters: [
+              {
+                name: 'id',
+                in: 'path',
+                required: true,
+                schema: { type: 'integer' }
+              }
+            ],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+
+    const parser = new SwaggerParser(doc as any, config);
+    const [api] = parser.parseApis();
+
+    expect(api.parameters).toEqual([
+      expect.objectContaining({ name: 'id', in: 'path', type: 'number' })
+    ]);
+  });
+
+  test('parseApis throws clear error for circular refs', () => {
+    const doc = createOpenApiDoc({
+      paths: {
+        '/loop/{id}': {
+          get: {
+            parameters: [{ $ref: '#/components/parameters/LoopParam' }],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      parameters: {
+        LoopParam: { $ref: '#/components/parameters/LoopParam' }
+      } as any
+    });
+
+    const parser = new SwaggerParser(doc as any, config);
+
+    expect(() => parser.parseApis()).toThrow(
+      '检测到循环 $ref 引用: #/components/parameters/LoopParam'
+    );
+  });
+
+  test('parseApis throws clear error when local ref depth is too deep', () => {
+    const parameters: Record<string, any> = {};
+    for (let i = 0; i <= 21; i++) {
+      parameters[`P${i}`] =
+        i === 21
+          ? {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' }
+            }
+          : { $ref: `#/components/parameters/P${i + 1}` };
+    }
+
+    const doc = createOpenApiDoc({
+      paths: {
+        '/deep/{id}': {
+          get: {
+            parameters: [{ $ref: '#/components/parameters/P0' }],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      parameters
+    });
+
+    const parser = new SwaggerParser(doc as any, config);
+
+    expect(() => parser.parseApis()).toThrow('$ref 解析超过最大深度');
+  });
+
+  test('parseApis decodes JSON Pointer escaped ref segments', () => {
+    const doc = createOpenApiDoc({
+      paths: {
+        '/escaped/{id}': {
+          get: {
+            parameters: [{ $ref: '#/components/parameters/Foo~1Bar' }],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      parameters: {
+        'Foo/Bar': {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: { type: 'string' }
+        }
+      } as any
+    });
+
+    const parser = new SwaggerParser(doc as any, config);
+    const [api] = parser.parseApis();
+
+    expect(api.parameters[0]).toEqual(
+      expect.objectContaining({ name: 'id', in: 'path', type: 'string' })
+    );
   });
 });

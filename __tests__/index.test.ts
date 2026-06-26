@@ -2,13 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Swagger2API, generate, generateFromConfig } from '../src/index';
 import { SwaggerConfig } from '../src/types';
-import { createSampleOpenAPIFile } from './helpers';
+import { createCleanProjectTemp, createSampleOpenAPIFile } from './helpers';
 
+/**
+ * 创建并清空 index 集成测试目录
+ * @param name 子目录名
+ * @returns 临时目录路径
+ */
 function mkTmp(name: string) {
-  const dir = path.resolve(__dirname, '../temp', name);
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  return createCleanProjectTemp(name);
 }
 
 describe('index (integration)', () => {
@@ -40,6 +42,13 @@ describe('index (integration)', () => {
 
     await generate(config);
     expect(fs.existsSync(path.join(out, 'index.ts'))).toBe(true);
+    const authContent = fs.readFileSync(
+      path.join(out, 'authController', 'index.ts'),
+      'utf-8'
+    );
+    expect(authContent).toMatch(/return request<.*>\(/);
+    expect(authContent).toMatch(/method: 'POST'/);
+    expect(authContent).not.toMatch(/return request\.post</);
   });
 
   test('generate produces JS files when generator is javascript', async () => {
@@ -232,17 +241,25 @@ describe('index (integration)', () => {
     const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code: number) => {
       throw new Error(`process.exit(${code})`);
     }) as any);
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
 
     afterEach(() => {
       exitSpy.mockClear();
+      consoleErrorSpy.mockClear();
     });
 
     afterAll(() => {
       exitSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
     });
 
     test('calls process.exit when config file does not exist', async () => {
       await expect(generateFromConfig('/non/existent/config.json')).rejects.toThrow('process.exit(1)');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('❌ 找不到配置文件')
+      );
     });
 
     test('calls process.exit when config file has invalid JSON', async () => {
@@ -252,6 +269,9 @@ describe('index (integration)', () => {
       fs.writeFileSync(configPath, '{ invalid json }', 'utf-8');
 
       await expect(generateFromConfig(configPath)).rejects.toThrow('process.exit(1)');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('❌ 配置文件 JSON 格式错误')
+      );
     });
 
     test('calls process.exit when config validation fails', async () => {
@@ -265,6 +285,7 @@ describe('index (integration)', () => {
       );
 
       await expect(generateFromConfig(configPath)).rejects.toThrow('process.exit(1)');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('❌ 配置验证失败:');
     });
   });
 });

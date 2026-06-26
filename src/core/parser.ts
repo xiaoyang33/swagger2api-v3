@@ -17,7 +17,9 @@ import {
   toPascalCase,
   stripMethodNamePrefixes,
   sanitizeTypeName,
-  removeMethodSuffix
+  removeMethodSuffix,
+  formatTsPropertyName,
+  logger
 } from '../utils';
 
 const HTTP_METHODS = [
@@ -29,6 +31,8 @@ const HTTP_METHODS = [
   'head',
   'options'
 ] as const;
+
+const MAX_REF_RESOLVE_DEPTH = 20;
 
 /**
  * Swagger文档解析器
@@ -93,10 +97,11 @@ export class SwaggerParser {
     globalParameters?: SwaggerParameter[]
   ): ApiInfo {
     // 合并全局参数和操作参数
-    const allParameters = [
-      ...(globalParameters || []),
-      ...(operation.parameters || [])
-    ].map((parameter) => this.resolveReference<SwaggerParameter>(parameter));
+    const allParameters = this.mergeParameters(
+      [...(globalParameters || []), ...(operation.parameters || [])].map(
+        (parameter) => this.resolveReference<SwaggerParameter>(parameter)
+      )
+    );
 
     // 处理 OpenAPI 3.0 requestBody
     if (operation.requestBody) {
@@ -151,7 +156,7 @@ export class SwaggerParser {
     // 获取请求体类型
     const bodyParam = allParameters.find((p) => p.in === 'body');
     const requestBodyType = bodyParam?.schema
-      ? swaggerTypeToTsType(bodyParam.schema)
+      ? swaggerTypeToTsType(bodyParam.schema, this.getAllSchemas())
       : undefined;
 
     // 解析参数信息
@@ -176,6 +181,7 @@ export class SwaggerParser {
       path,
       description: operation.summary || operation.description,
       tags: operation.tags || [],
+      deprecated: operation.deprecated,
       parameters,
       responseType,
       requestBodyType
@@ -190,14 +196,14 @@ export class SwaggerParser {
     const types: TypeInfo[] = [];
 
     // Debug log
-    console.log('解析类型定义...');
-    console.log('Has components:', !!this.document.components);
+    logger.debug('解析类型定义...');
+    logger.debugKV('components', !!this.document.components);
     if (this.document.components) {
-      console.log('Has schemas:', !!this.document.components.schemas);
+      logger.debugKV('schemas', !!this.document.components.schemas);
       if (this.document.components.schemas) {
-        console.log(
-          'Schema keys:',
-          Object.keys(this.document.components.schemas)
+        logger.debugKV(
+          'schema 列表',
+          Object.keys(this.document.components.schemas).join(', ')
         );
       }
     }
@@ -239,7 +245,7 @@ export class SwaggerParser {
           const comment = value.description
             ? ` /** ${value.description} */`
             : '';
-          return `${comment}\n  ${key}${optional}: ${type};`;
+          return `${comment}\n  ${formatTsPropertyName(key)}${optional}: ${type};`;
         })
         .join('\n');
 
@@ -255,7 +261,7 @@ export class SwaggerParser {
         .map((value: any, index: number) => {
           const key = this.getEnumMemberName(schema, value, index);
 
-          return `  ${key} = '${value}'`;
+          return `  ${key} = ${JSON.stringify(String(value))}`;
         })
         .join(',\n');
       definition = `export enum ${typeName} {\n${enumValues}\n}`;
@@ -279,7 +285,11 @@ export class SwaggerParser {
    * @param index 枚举值索引
    * @returns 枚举成员名称
    */
-  private getEnumMemberName(schema: SwaggerSchema, value: any, index: number): string {
+  private getEnumMemberName(
+    schema: SwaggerSchema,
+    value: any,
+    index: number
+  ): string {
     const extensionName =
       schema['x-enum-varnames']?.[index] || schema['x-enumNames']?.[index];
     if (extensionName) {
@@ -299,22 +309,61 @@ export class SwaggerParser {
    * @param value 可能带有 $ref 的对象
    * @returns 引用解析后的对象
    */
-  private resolveReference<T>(value: T): T {
+  private resolveReference<T>(
+    value: T,
+    seenRefs = new Set<string>(),
+    depth = 0
+  ): T {
     if (!value || !(value as any).$ref) {
       return value;
     }
 
-    const refPath = (value as any).$ref.replace(/^#\//, '').split('/');
+    const ref = (value as any).$ref;
+    if (!ref.startsWith('#/')) {
+      throw new Error(`暂不支持外部 $ref 引用: ${ref}`);
+    }
+
+    if (depth >= MAX_REF_RESOLVE_DEPTH) {
+      throw new Error(`$ref 解析超过最大深度: ${ref}`);
+    }
+
+    if (seenRefs.has(ref)) {
+      throw new Error(`检测到循环 $ref 引用: ${ref}`);
+    }
+
+    seenRefs.add(ref);
+
+    const refPath = ref
+      .replace(/^#\//, '')
+      .split('/')
+      .map((segment: string) =>
+        decodeURIComponent(segment).replace(/~1/g, '/').replace(/~0/g, '~')
+      );
     let current: any = this.document;
 
     for (const segment of refPath) {
       current = current?.[segment];
-      if (!current) {
-        return value;
+      if (current === undefined) {
+        throw new Error(`无法解析 $ref 引用: ${ref}`);
       }
     }
 
-    return current as T;
+    return this.resolveReference(current as T, seenRefs, depth + 1);
+  }
+
+  /**
+   * 合并同名同位置参数，后出现的 operation 级参数覆盖 path 级参数
+   * @param parameters 参数数组
+   * @returns 合并后的参数数组
+   */
+  private mergeParameters(parameters: SwaggerParameter[]): SwaggerParameter[] {
+    const merged = new Map<string, SwaggerParameter>();
+
+    for (const parameter of parameters) {
+      merged.set(`${parameter.in}:${parameter.name}`, parameter);
+    }
+
+    return Array.from(merged.values());
   }
 
   /**
@@ -327,8 +376,10 @@ export class SwaggerParser {
 
     for (const api of apis) {
       const tags = api.tags.length > 0 ? api.tags : ['default'];
+      const strategy = this.config.multiTagStrategy ?? 'first';
+      const groupTags = strategy === 'all' ? [tags.join('-')] : [tags[0]];
 
-      for (const tag of tags) {
+      for (const tag of groupTags) {
         if (!groupedApis.has(tag)) {
           groupedApis.set(tag, []);
         }

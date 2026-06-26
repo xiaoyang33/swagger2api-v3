@@ -2,6 +2,24 @@ import { SwaggerParameter, SwaggerSchema, SwaggerResponse, SwaggerResponses } fr
 import { sanitizeTypeName } from './naming';
 
 /**
+ * 判断字符串是否为合法 TypeScript 标识符
+ * @param name 属性名
+ * @returns 是否为合法标识符
+ */
+export function isValidIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
+}
+
+/**
+ * 格式化 TypeScript 属性名
+ * @param name 属性名
+ * @returns 可用于类型声明的属性名
+ */
+export function formatTsPropertyName(name: string): string {
+  return isValidIdentifier(name) ? name : JSON.stringify(name);
+}
+
+/**
  * 移除联合类型中的顶层 null 类型
  * @param typeStr 类型字符串
  * @returns 移除 null 后的类型字符串
@@ -76,7 +94,7 @@ export function swaggerTypeToTsType(schema: SwaggerSchema | undefined | null, sc
     const refSchema = schema.allOf.find((item) => item.$ref);
     const secondSchema = schema.allOf.find((item) => !item.$ref);
 
-    if (refSchema && secondSchema) {
+    if (refSchema && secondSchema && schema.allOf.length === 2) {
       const refName = getRefName(refSchema.$ref || '');
       const sanitizedRefName = sanitizeTypeName(refName || '');
 
@@ -96,7 +114,7 @@ export function swaggerTypeToTsType(schema: SwaggerSchema | undefined | null, sc
               const optional = secondSchema.required?.includes(key) ? '' : '?';
               let type = swaggerTypeToTsType(value, schemas);
               if (optional === '?') type = stripNullFromUnion(type);
-              return `${key}${optional}: ${type}`;
+              return `${formatTsPropertyName(key)}${optional}: ${type}`;
             })
             .join('; ')} }`;
           baseType = `${sanitizedRefName}<${combinedType}>`;
@@ -108,9 +126,10 @@ export function swaggerTypeToTsType(schema: SwaggerSchema | undefined | null, sc
       }
     } else {
       const types = schema.allOf
-        .map((item) => swaggerTypeToTsType(item))
+        .map((item) => swaggerTypeToTsType(item, schemas))
         .filter((type) => type !== 'any');
-      baseType = types.length > 0 ? types[0] : 'any';
+      const uniqueTypes = Array.from(new Set(types));
+      baseType = uniqueTypes.length > 0 ? uniqueTypes.join(' & ') : 'any';
     }
   } else if (schema.anyOf || schema.oneOf) {
     const types = (schema.anyOf || schema.oneOf)!.map((item) => {
@@ -153,7 +172,7 @@ export function swaggerTypeToTsType(schema: SwaggerSchema | undefined | null, sc
           const optional = schema.required?.includes(key) ? '' : '?';
           let type = swaggerTypeToTsType(value, schemas);
           if (optional === '?') type = stripNullFromUnion(type);
-          return `  ${key}${optional}: ${type};`;
+          return `  ${formatTsPropertyName(key)}${optional}: ${type};`;
         })
         .join('\n');
       baseType = `{\n${properties}\n}`;
@@ -220,7 +239,7 @@ export function getRefName(ref: string): string {
  */
 function toLiteralType(value: any): string {
   if (value === null) return 'null';
-  if (typeof value === 'string') return `'${value}'`;
+  if (typeof value === 'string') return JSON.stringify(value);
   return String(value);
 }
 

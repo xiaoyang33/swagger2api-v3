@@ -1,6 +1,6 @@
 {
   "$schema": "./dist/.swagger2api.schema.json",
-  "input": "http://localhost:3000/admin/docs/json",
+  "input": "http://172.50.109.244:5005/api/openapi.json",
   "output": "./src/api",
   "importTemplate": "import { request } from '@/utils/request';",
   "generator": "typescript",
@@ -22,5 +22,6 @@
   },
   "options": {
     "addComments": true
-  }
+  },
+  "multiTagStrategy": "first"
 }

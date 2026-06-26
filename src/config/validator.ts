@@ -6,6 +6,7 @@ const CONFIG_KEYS = [
   'output',
   'generator',
   'groupByTags',
+  'multiTagStrategy',
   'overwrite',
   'prefix',
   'requestStyle',
@@ -52,6 +53,12 @@ export function validateSwaggerConfig(config: SwaggerConfig): string[] {
     errors
   );
   validateBoolean(config.groupByTags, 'groupByTags', errors);
+  validateOptionalEnum(
+    config.multiTagStrategy,
+    'multiTagStrategy',
+    ['first', 'all'],
+    errors
+  );
   validateOptionalBoolean(config.overwrite, 'overwrite', errors);
   validateOptionalString(config.prefix, 'prefix', errors);
   validateOptionalString(config.importTemplate, 'importTemplate', errors);

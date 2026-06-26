@@ -44,6 +44,7 @@ The tool generates a `.swagger.config.json` configuration file:
   "generator": "typescript",
   "requestStyle": "generic",
   "groupByTags": true,
+  "multiTagStrategy": "first",
   "overwrite": true,
   "prefix": "",
   "lint": "prettier --write",
@@ -79,6 +80,7 @@ npx swagger2api-v3 generate
 | `output`                 | string                | `'./src/api'`  | Output directory for generated code                                                                                                                                |
 | `generator`              | string                | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation                                 |
 | `groupByTags`            | boolean               | `true`         | Whether to group files by tags                                                                                                                                     |
+| `multiTagStrategy`       | 'first' \| 'all'      | `'first'`      | Grouping strategy for operations with multiple tags. `first` uses only the first tag, `all` combines all tags into one group name                                    |
 | `overwrite`              | boolean               | `true`         | Whether to overwrite existing files                                                                                                                                |
 | `prefix`                 | string                | `''`           | Common prefix for API paths                                                                                                                                        |
 | `importTemplate`         | string                | -              | Import statement template for request function                                                                                                                     |

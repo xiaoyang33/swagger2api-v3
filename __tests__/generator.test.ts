@@ -1,49 +1,50 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SwaggerParser } from '../src/core/parser';
-import { CodeGenerator } from '../src/core/generator';
-import { loadSwaggerDocument } from '../src/utils';
 import { SwaggerConfig } from '../src/types';
-import { createSampleOpenAPIFile } from './helpers';
+import {
+  createCleanProjectTemp,
+  createOpenApiDoc,
+  createTsConfig,
+  runGenerator
+} from './helpers';
 
+/**
+ * 创建生成器基础测试配置
+ * @param outputDir 输出目录
+ * @returns Swagger 配置
+ */
 function createBaseConfig(outputDir: string): SwaggerConfig {
-  return {
-    input: createSampleOpenAPIFile(),
-    output: outputDir,
-    generator: 'typescript',
-    groupByTags: true,
-    requestStyle: 'generic',
-    options: {
-      generateModels: true,
-      generateApis: true,
-      generateIndex: true,
-      useAxios: true,
-      addComments: true,
-      prettify: true
-    },
-    importTemplate: "import { request } from '@/utils/request'"
-  } as any;
+  return createTsConfig(outputDir);
 }
 
 describe('generator', () => {
+  /**
+   * 创建并清空生成器测试目录
+   * @param subdir 子目录名
+   * @returns 临时目录路径
+   */
   function mkProjectTemp(subdir: string): string {
-    const base = path.resolve(__dirname, '../temp', subdir);
-    fs.rmSync(base, { recursive: true, force: true });
-    fs.mkdirSync(base, { recursive: true });
-    return base;
+    return createCleanProjectTemp(subdir);
   }
+
+  /**
+   * 写入 OpenAPI 文档到项目 temp 目录
+   * @param outputDir 输出目录
+   * @param name 文件名
+   * @param doc OpenAPI 文档
+   * @returns 文档路径
+   */
+  function writeDoc(outputDir: string, name: string, doc: unknown): string {
+    const file = path.join(outputDir, name);
+    fs.writeFileSync(file, JSON.stringify(doc, null, 2), 'utf-8');
+    return file;
+  }
+
   test('generates TS grouped files including types and index', async () => {
     const tmp = mkProjectTemp('gen-ts');
     const config = createBaseConfig(tmp);
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     // types.ts exists and contains ResOp definition
     const typesFile = path.join(tmp, 'types.ts');
@@ -77,14 +78,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.generator = 'javascript';
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     // types.ts should NOT exist
     expect(fs.existsSync(path.join(tmp, 'types.ts'))).toBe(false);
@@ -108,14 +102,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.groupByTags = false;
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const apiFile = path.join(tmp, 'api.ts');
     expect(fs.existsSync(apiFile)).toBe(true);
@@ -126,14 +113,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.headerComment = '/**\n * Custom generated header\n */';
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const indexContent = fs.readFileSync(path.join(tmp, 'index.ts'), 'utf-8');
     const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
@@ -147,14 +127,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.requestStyle = 'method';
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const authDir = path.join(tmp, 'authController');
     const tagContent = fs.readFileSync(path.join(authDir, 'index.ts'), 'utf-8');
@@ -167,14 +140,7 @@ describe('generator', () => {
     const tmp = mkProjectTemp('gen-path-params');
     const config = createBaseConfig(tmp);
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const userDir = path.join(tmp, 'userController');
     const tagContent = fs.readFileSync(path.join(userDir, 'index.ts'), 'utf-8');
@@ -186,14 +152,7 @@ describe('generator', () => {
     const tmp = mkProjectTemp('gen-query-params');
     const config = createBaseConfig(tmp);
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const userDir = path.join(tmp, 'userController');
     const tagContent = fs.readFileSync(path.join(userDir, 'index.ts'), 'utf-8');
@@ -203,19 +162,108 @@ describe('generator', () => {
     expect(searchFn![0]).toContain('params');
   });
 
+  test('does not include path parameters in axios query params', async () => {
+    const tmp = mkProjectTemp('gen-path-query');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/users/{id}': {
+          get: {
+            operationId: 'getUser',
+            tags: ['User'],
+            parameters: [
+              {
+                name: 'id',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              },
+              {
+                name: 'verbose',
+                in: 'query',
+                schema: { type: 'boolean' }
+              },
+              {
+                name: 'x-request-id',
+                in: 'query',
+                schema: { type: 'string' }
+              }
+            ],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const config = createBaseConfig(tmp);
+    config.input = writeDoc(tmp, 'path-query.json', doc);
+    config.groupByTags = false;
+
+    await runGenerator(config);
+
+    const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
+    expect(apiContent).toContain('url: `/users/${params.id}`');
+    expect(apiContent).toContain(
+      'params: { "verbose": params.verbose, "x-request-id": params["x-request-id"] }'
+    );
+    expect(apiContent).toContain('"x-request-id"?: string');
+    expect(apiContent).not.toContain('params: { "id": params.id');
+  });
+
+  test('generates deprecated comments from operation metadata', async () => {
+    const tmp = mkProjectTemp('gen-deprecated');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/legacy': {
+          get: {
+            operationId: 'getLegacy',
+            tags: ['Legacy'],
+            summary: '旧接口',
+            deprecated: true,
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const config = createBaseConfig(tmp);
+    config.input = writeDoc(tmp, 'deprecated.json', doc);
+
+    await runGenerator(config);
+
+    const apiContent = fs.readFileSync(
+      path.join(tmp, 'legacy', 'index.ts'),
+      'utf-8'
+    );
+    expect(apiContent).toContain('@deprecated');
+  });
+
+  test('generates valid types for invalid schema property names', async () => {
+    const tmp = mkProjectTemp('gen-invalid-props');
+    const doc = createOpenApiDoc({
+      schemas: {
+        WeirdDto: {
+          type: 'object',
+          properties: {
+            'x-request-id': { type: 'string' },
+            'user.name': { type: 'string' }
+          }
+        }
+      }
+    });
+    const config = createBaseConfig(tmp);
+    config.input = writeDoc(tmp, 'invalid-props.json', doc);
+
+    await runGenerator(config);
+
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+    expect(typesContent).toContain('"x-request-id"?: string;');
+    expect(typesContent).toContain('"user.name"?: string;');
+  });
+
   test('uses kebab-case folder names when tagGrouping.fileNaming is kebab-case', async () => {
     const tmp = mkProjectTemp('gen-kebab');
     const config = createBaseConfig(tmp);
     config.tagGrouping = { fileNaming: 'kebab-case' };
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     expect(fs.existsSync(path.join(tmp, 'auth-controller'))).toBe(true);
     expect(fs.existsSync(path.join(tmp, 'user-controller'))).toBe(true);
@@ -226,14 +274,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.tagGrouping = { fileNaming: 'tag' };
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     expect(fs.existsSync(path.join(tmp, 'authcontroller'))).toBe(true);
   });
@@ -243,21 +284,24 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.overwrite = false;
 
-    // 先创建一个标记文件
-    const markerFile = path.join(tmp, 'marker.txt');
-    fs.writeFileSync(markerFile, 'should-keep', 'utf-8');
+    const existingTypesFile = path.join(tmp, 'types.ts');
+    const existingIndexFile = path.join(tmp, 'index.ts');
+    const existingTagDir = path.join(tmp, 'authController');
+    const existingTagFile = path.join(existingTagDir, 'index.ts');
+    fs.mkdirSync(existingTagDir, { recursive: true });
+    fs.writeFileSync(existingTypesFile, '// SENTINEL_TYPES', 'utf-8');
+    fs.writeFileSync(existingIndexFile, '// SENTINEL_INDEX', 'utf-8');
+    fs.writeFileSync(existingTagFile, '// SENTINEL_API', 'utf-8');
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
+    await runGenerator(config);
 
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
-
-    expect(fs.existsSync(markerFile)).toBe(true);
-    expect(fs.readFileSync(markerFile, 'utf-8')).toBe('should-keep');
+    expect(fs.readFileSync(existingTypesFile, 'utf-8')).toBe(
+      '// SENTINEL_TYPES'
+    );
+    expect(fs.readFileSync(existingIndexFile, 'utf-8')).toBe(
+      '// SENTINEL_INDEX'
+    );
+    expect(fs.readFileSync(existingTagFile, 'utf-8')).toBe('// SENTINEL_API');
   });
 
   test('does not generate types.ts when generateModels is false', async () => {
@@ -265,16 +309,22 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.options!.generateModels = false;
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     expect(fs.existsSync(path.join(tmp, 'types.ts'))).toBe(false);
+    const authContent = fs.readFileSync(
+      path.join(tmp, 'authController', 'index.ts'),
+      'utf-8'
+    );
+    expect(authContent).not.toMatch(/\bLoginDto\b/);
+    expect(authContent).not.toMatch(/\bResOp\b/);
+    expect(authContent).toMatch(/return request<any>\(/);
+
+    const userContent = fs.readFileSync(
+      path.join(tmp, 'userController', 'index.ts'),
+      'utf-8'
+    );
+    expect(userContent).toMatch(/params: \{ id: string \}/);
   });
 
   test('does not generate API files when generateApis is false', async () => {
@@ -282,14 +332,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.options!.generateApis = false;
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     expect(fs.existsSync(path.join(tmp, 'authController'))).toBe(false);
     expect(fs.existsSync(path.join(tmp, 'api.ts'))).toBe(false);
@@ -305,14 +348,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.options!.generateIndex = false;
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     expect(fs.existsSync(path.join(tmp, 'index.ts'))).toBe(false);
   });
@@ -322,14 +358,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.options!.addComments = false;
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const authDir = path.join(tmp, 'authController');
     const tagContent = fs.readFileSync(path.join(authDir, 'index.ts'), 'utf-8');
@@ -342,14 +371,7 @@ describe('generator', () => {
     const config = createBaseConfig(tmp);
     config.groupByTags = false;
 
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const types = parser.parseTypes();
-    const grouped = parser.groupApisByTags(apis);
-
-    const gen = new CodeGenerator(config);
-    await gen.generateAll(apis, types, grouped);
+    await runGenerator(config);
 
     const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
     expect(apiContent).toMatch(/from '\.\/types'/);

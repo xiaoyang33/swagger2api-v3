@@ -56,7 +56,7 @@ describe('generateApiComment', () => {
       { in: 'body', description: '更新数据' }
     ];
     const result = generateApiComment({ summary: '更新用户' }, params);
-    expect(result).toContain('@param params');
+    expect(result).toContain('@param params 用户ID, 详细信息');
     expect(result).toContain('@param data 更新数据');
     expect(result).toContain('@param config');
   });

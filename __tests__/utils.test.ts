@@ -8,6 +8,8 @@ import {
   sanitizeFilename,
   sanitizeTypeName,
   stripNullFromUnion,
+  isValidIdentifier,
+  formatTsPropertyName,
   swaggerTypeToTsType,
   getResponseType,
   getSchemaFromContent,
@@ -68,6 +70,26 @@ describe('utils', () => {
   test('sanitizeTypeName handles dots and special chars', () => {
     expect(sanitizeTypeName('System.Menu.ListResp')).toBe('SystemMenuListResp');
     expect(sanitizeTypeName('some.other-Type')).toBe('SomeOtherType');
+  });
+
+  test('isValidIdentifier identifies valid TypeScript identifiers', () => {
+    expect(isValidIdentifier('foo')).toBe(true);
+    expect(isValidIdentifier('_bar')).toBe(true);
+    expect(isValidIdentifier('$baz')).toBe(true);
+    expect(isValidIdentifier('foo123')).toBe(true);
+  });
+
+  test('isValidIdentifier rejects invalid TypeScript identifiers', () => {
+    expect(isValidIdentifier('x-request-id')).toBe(false);
+    expect(isValidIdentifier('123abc')).toBe(false);
+    expect(isValidIdentifier('user.name')).toBe(false);
+    expect(isValidIdentifier('')).toBe(false);
+  });
+
+  test('formatTsPropertyName quotes invalid identifiers', () => {
+    expect(formatTsPropertyName('foo')).toBe('foo');
+    expect(formatTsPropertyName('x-request-id')).toBe('"x-request-id"');
+    expect(formatTsPropertyName('123abc')).toBe('"123abc"');
   });
 
   test('sanitizeTypeName handles empty string', () => {
@@ -140,7 +162,38 @@ describe('utils', () => {
     const schema = {
       allOf: [{ type: 'string' }, { type: 'integer' }]
     };
-    expect(swaggerTypeToTsType(schema)).toBe('string');
+    expect(swaggerTypeToTsType(schema)).toBe('string & number');
+  });
+
+  test('swaggerTypeToTsType allOf with multiple refs returns intersection', () => {
+    const schema = {
+      allOf: [
+        { $ref: '#/components/schemas/UserDto' },
+        { $ref: '#/components/schemas/AuditDto' }
+      ]
+    };
+    expect(swaggerTypeToTsType(schema)).toBe('UserDto & AuditDto');
+  });
+
+  test('swaggerTypeToTsType allOf with three elements uses intersection', () => {
+    const schema = {
+      allOf: [
+        { $ref: '#/components/schemas/BaseDto' },
+        { type: 'string' },
+        {
+          type: 'object',
+          properties: {
+            name: { type: 'string' }
+          }
+        }
+      ]
+    };
+    const result = swaggerTypeToTsType(schema);
+
+    expect(result).toContain('BaseDto');
+    expect(result).toContain('string');
+    expect(result).toContain('name?: string');
+    expect(result).toContain('&');
   });
 
   test('swaggerTypeToTsType allOf with only ref returns sanitized name', () => {
@@ -236,14 +289,33 @@ describe('utils', () => {
     expect(result).toContain('zip?: string');
   });
 
+  test('swaggerTypeToTsType quotes invalid object property names', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        'x-request-id': { type: 'string' },
+        'user.name': { type: 'string' },
+        '1st': { type: 'integer' }
+      }
+    };
+    const result = swaggerTypeToTsType(schema);
+
+    expect(result).toContain('"x-request-id"?: string;');
+    expect(result).toContain('"user.name"?: string;');
+    expect(result).toContain('"1st"?: number;');
+  });
+
   // ─── swaggerTypeToTsType — enum ───
   test('swaggerTypeToTsType handles non-string enum values', () => {
     expect(swaggerTypeToTsType({ type: 'integer', enum: [0, 1] })).toBe(
       '0 | 1'
     );
-    expect(swaggerTypeToTsType({ enum: ['on', null] })).toBe("'on' | null");
+    expect(swaggerTypeToTsType({ enum: ['on', null] })).toBe('"on" | null');
     expect(swaggerTypeToTsType({ type: 'string', enum: ['active', 'inactive'] })).toBe(
-      "'active' | 'inactive'"
+      '"active" | "inactive"'
+    );
+    expect(swaggerTypeToTsType({ enum: ["can't", 'c\\d'] })).toBe(
+      '"can\'t" | "c\\\\d"'
     );
   });
 

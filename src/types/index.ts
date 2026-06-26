@@ -16,6 +16,8 @@ export interface SwaggerConfig {
   generator: 'typescript' | 'javascript';
   /** 按 tags 分组生成文件 */
   groupByTags: boolean;
+  /** 多 tag 接口分组策略，first 只使用第一个 tag，all 将所有 tags 合成一个分组 */
+  multiTagStrategy?: 'first' | 'all';
   /** 是否覆盖更新，默认为true。为true时会先删除输出目录下的所有文件 */
   overwrite?: boolean;
   /** 接口路径公共前缀，默认为空字符串 */
@@ -371,6 +373,8 @@ export interface ApiInfo {
   description?: string;
   /** 标签 */
   tags: string[];
+  /** 是否废弃 */
+  deprecated?: boolean;
   /** 参数 */
   parameters: ParameterInfo[];
   /** 响应类型 */

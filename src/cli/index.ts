@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { generateFromConfig } from '../index';
 import { SwaggerConfig } from '../types';
+import { logger } from '../utils';
 
 const program = new Command();
 
@@ -47,14 +48,14 @@ program
           }
         };
 
-        const { generate } = await import('../index');
+        const { generate } = await import('../index.js');
         await generate(config);
       } else {
         // 使用配置文件生成
         await generateFromConfig(options.config);
       }
     } catch (error) {
-      console.error('❌ 生成失败:', error);
+      logger.error('生成失败', error);
       process.exit(1);
     }
   });
@@ -75,12 +76,10 @@ program
         options.force
       );
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
-      console.log(successMessage, configPath);
-      console.log(
-        '💡 请根据需要修改配置文件，然后运行 swagger2api-v3 generate'
-      );
+      logger.success(`${successMessage} ${configPath}`);
+      logger.info('请根据需要修改配置文件，然后运行 swagger2api-v3 generate');
     } catch (error) {
-      console.error('❌ 创建配置文件失败:', error);
+      logger.error('创建配置文件失败', error);
       process.exit(1);
     }
   });
@@ -95,29 +94,28 @@ program
 
     try {
       if (!fs.existsSync(configPath)) {
-        console.error(`❌ 找不到配置文件: ${configPath}`);
+        logger.error(`找不到配置文件: ${configPath}`);
         process.exit(1);
       }
 
       const configContent = fs.readFileSync(configPath, 'utf-8');
       const config: SwaggerConfig = JSON.parse(configContent);
 
-      const { validateSwaggerConfig } = await import('../config/validator');
+      const { validateSwaggerConfig } = await import('../config/validator.js');
       const errors = validateSwaggerConfig(config);
 
       if (errors.length === 0) {
-        console.log('✅ 配置文件验证通过');
+        logger.success('配置文件验证通过');
       } else {
-        console.error('❌ 配置验证失败:');
-        errors.forEach((error) => console.error(`   - ${error}`));
+        logger.errorList('配置验证失败:', errors);
         process.exit(1);
       }
     } catch (error) {
       if (error instanceof SyntaxError) {
-        console.error(`❌ 配置文件 JSON 格式错误: ${configPath}`);
-        console.error('错误详情:', error.message);
+        logger.error(`配置文件 JSON 格式错误: ${configPath}`);
+        logger.error(`错误详情: ${error.message}`);
       } else {
-        console.error('❌ 配置文件验证失败:', error);
+        logger.error('配置文件验证失败', error);
       }
       process.exit(1);
     }
@@ -161,6 +159,7 @@ function createDefaultConfig(): SwaggerConfig {
     generator: 'typescript',
     requestStyle: 'generic',
     groupByTags: true,
+    multiTagStrategy: 'first',
     overwrite: true,
     prefix: '',
     lint: 'prettier --write',
@@ -192,14 +191,14 @@ function getInitSuccessMessage(
   force?: boolean
 ): string {
   if (existsBeforeInit && force) {
-    return '✅ 配置文件已覆盖:';
+    return '配置文件已覆盖:';
   }
 
   if (existsBeforeInit) {
-    return '✅ 配置文件已补全:';
+    return '配置文件已补全:';
   }
 
-  return '✅ 配置文件已创建:';
+  return '配置文件已创建:';
 }
 
 /**
@@ -213,10 +212,10 @@ function readExistingConfig(configPath: string): SwaggerConfig {
     return JSON.parse(configContent);
   } catch (error) {
     if (error instanceof SyntaxError) {
-      console.error(`❌ 配置文件 JSON 格式错误: ${configPath}`);
-      console.error('错误详情:', error.message);
+      logger.error(`配置文件 JSON 格式错误: ${configPath}`);
+      logger.error(`错误详情: ${error.message}`);
     } else {
-      console.error('❌ 读取配置文件失败:', error);
+      logger.error('读取配置文件失败', error);
     }
     process.exit(1);
     throw error;

@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { SwaggerConfig, ApiInfo, TypeInfo, SwaggerSchema } from '../types';
@@ -10,7 +11,10 @@ import {
   sanitizeFilename,
   toKebabCase,
   toCamelCase,
-  swaggerTypeToTsType
+  swaggerTypeToTsType,
+  formatTsPropertyName,
+  isValidIdentifier,
+  logger
 } from '../utils';
 
 const execPromise = promisify(exec);
@@ -80,7 +84,7 @@ export class CodeGenerator {
   private async generateTypesFile(types: TypeInfo[]): Promise<void> {
     const content = this.generateTypesContent(types);
     const filePath = path.join(this.config.output, 'types.ts');
-    writeFile(filePath, content);
+    this.writeGeneratedFile(filePath, content);
   }
 
   /**
@@ -141,7 +145,7 @@ export class CodeGenerator {
       const filePath = path.join(tagFolderPath, `index.${ext}`);
       const content = this.generateApiFileContent(apis, types, tag);
 
-      writeFile(filePath, content);
+      this.writeGeneratedFile(filePath, content);
     }
   }
 
@@ -158,7 +162,7 @@ export class CodeGenerator {
     const filePath = path.join(this.config.output, `api.${ext}`);
     const content = this.generateApiFileContent(apis, types);
 
-    writeFile(filePath, content);
+    this.writeGeneratedFile(filePath, content);
   }
 
   /**
@@ -227,7 +231,7 @@ export class CodeGenerator {
         description: p.description
       }));
       const comment = generateApiComment(
-        { summary: api.description, deprecated: false },
+        { summary: api.description, deprecated: api.deprecated },
         swaggerParams
       );
       parts.push(comment);
@@ -247,7 +251,10 @@ export class CodeGenerator {
       swaggerParameters,
       this.config.generator === 'javascript'
     );
-    const responseType = api.responseType || 'any';
+    const responseType =
+      this.config.options?.generateModels === false
+        ? 'any'
+        : api.responseType || 'any';
     const functionName = toCamelCase(api.name);
 
     parts.push(`export const ${functionName} = (${functionParams}) => {`);
@@ -299,7 +306,8 @@ export class CodeGenerator {
         const paramType = allParams
           .map((p) => {
             const optional = p.required ? '' : '?';
-            return `${p.name}${optional}: ${p.type}`;
+            const type = this.getSafeGeneratedType(p.type);
+            return `${formatTsPropertyName(p.name)}${optional}: ${type}`;
           })
           .join(', ');
 
@@ -320,7 +328,7 @@ export class CodeGenerator {
         const bodyType = bodyParam.schema
           ? this.getTypeFromSchema(bodyParam.schema)
           : bodyParam.type;
-        params.push(`data: ${bodyType}`);
+        params.push(`data: ${this.getSafeGeneratedType(bodyType)}`);
       }
     }
 
@@ -336,7 +344,22 @@ export class CodeGenerator {
    * @returns 类型字符串
    */
   private getTypeFromSchema(schema: SwaggerSchema): string {
+    if (this.config.options?.generateModels === false) {
+      return 'any';
+    }
+
     return swaggerTypeToTsType(schema);
+  }
+
+  /**
+   * 获取当前配置下可安全输出的类型
+   * @param type 类型字符串
+   * @returns 安全类型字符串
+   */
+  private getSafeGeneratedType(type: string | undefined): string {
+    if (!type) return 'any';
+    if (this.config.options?.generateModels !== false) return type;
+    return this.isPrimitiveType(type) ? type : 'any';
   }
 
   /**
@@ -487,8 +510,16 @@ export class CodeGenerator {
 
     // 查询参数和路径参数都从params对象中获取
     if (queryParams.length > 0) {
-      // 直接传递params对象，让axios自动过滤undefined值
-      config.push('params');
+      if (pathParams.length > 0) {
+        const queryEntries = queryParams.map(
+          (param) =>
+            `${JSON.stringify(param.name)}: ${this.getParamAccessExpression(param.name)}`
+        );
+        config.push(`params: { ${queryEntries.join(', ')} }`);
+      } else {
+        // 直接传递params对象，让axios自动过滤undefined值
+        config.push('params');
+      }
     }
 
     // 请求体数据
@@ -507,6 +538,17 @@ export class CodeGenerator {
     config.push('...config');
 
     return `{\n    ${config.join(',\n    ')}\n  }`;
+  }
+
+  /**
+   * 生成 params 对象字段访问表达式
+   * @param name 参数名
+   * @returns 字段访问表达式
+   */
+  private getParamAccessExpression(name: string): string {
+    return isValidIdentifier(name)
+      ? `params.${name}`
+      : `params[${JSON.stringify(name)}]`;
   }
 
   /**
@@ -543,6 +585,19 @@ export class CodeGenerator {
 
     const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
     const filePath = path.join(this.config.output, `index.${ext}`);
+    this.writeGeneratedFile(filePath, content);
+  }
+
+  /**
+   * 写入生成文件，overwrite=false 时保留已存在文件
+   * @param filePath 文件路径
+   * @param content 文件内容
+   */
+  private writeGeneratedFile(filePath: string, content: string): void {
+    if (this.config.overwrite === false && fs.existsSync(filePath)) {
+      return;
+    }
+
     writeFile(filePath, content);
   }
 
@@ -589,18 +644,16 @@ export class CodeGenerator {
     if (!this.config.lint) return;
 
     try {
-      console.log(
-        `🎨 Running lint command: ${this.config.lint} ${this.config.output}`
-      );
+      logger.info(`执行 Lint 命令: ${this.config.lint} ${this.config.output}`);
       const result = await execPromise(
         `${this.config.lint} ${this.config.output}`
       );
       if (result.stdout) {
-        console.log(result.stdout);
+        logger.info(result.stdout.trim());
       }
-      console.log('✅ Lint completed successfully');
+      logger.success('Lint 执行完成');
     } catch (error: any) {
-      console.warn(`⚠️  Failed to run lint command:`, error.message);
+      logger.warn(`Lint 命令执行失败: ${error.message}`);
     }
   }
 }

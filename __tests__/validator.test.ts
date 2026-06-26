@@ -54,6 +54,19 @@ describe('validateSwaggerConfig', () => {
     expect(errors2.every((e) => !e.includes('requestStyle'))).toBe(true);
   });
 
+  test('multiTagStrategy 为非法值时报错', () => {
+    const config = { ...validConfig(), multiTagStrategy: 'duplicate' as any };
+    const errors = validateSwaggerConfig(config);
+    expect(errors.some((e) => e.includes('multiTagStrategy'))).toBe(true);
+  });
+
+  test('multiTagStrategy 为合法值时不报错', () => {
+    const errors1 = validateSwaggerConfig({ ...validConfig(), multiTagStrategy: 'first' });
+    const errors2 = validateSwaggerConfig({ ...validConfig(), multiTagStrategy: 'all' });
+    expect(errors1.every((e) => !e.includes('multiTagStrategy'))).toBe(true);
+    expect(errors2.every((e) => !e.includes('multiTagStrategy'))).toBe(true);
+  });
+
   test('filter.include.tags 为非字符串数组时报错', () => {
     const config = {
       ...validConfig(),
@@ -118,6 +131,7 @@ describe('validateSwaggerConfig', () => {
       lint: 'prettier --write',
       methodNameIgnorePrefix: ['api', 'auth'],
       addMethodSuffix: true,
+      multiTagStrategy: 'first',
       headerComment: '/** custom */',
       filter: { include: { tags: ['User'] }, exclude: { tags: [] } },
       tagGrouping: { enabled: true, fileNaming: 'camelCase' },

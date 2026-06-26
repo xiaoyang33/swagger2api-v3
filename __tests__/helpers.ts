@@ -1,5 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { SwaggerParser } from '../src/core/parser';
+import { CodeGenerator } from '../src/core/generator';
+import { loadSwaggerDocument } from '../src/utils';
+import {
+  ApiInfo,
+  SwaggerConfig,
+  SwaggerDocument,
+  SwaggerOperation,
+  SwaggerSchema,
+  TypeInfo
+} from '../src/types';
 
 /**
  * 创建临时 OpenAPI JSON 文件并返回路径
@@ -7,10 +18,7 @@ import * as path from 'path';
  */
 export function createSampleOpenAPIFile(): string {
   const tmp = ensureProjectTemp('fixtures');
-  const file = path.join(
-    tmp,
-    `openapi-${Date.now()}-${Math.random().toString(36).slice(2)}.json`
-  );
+  const file = path.join(tmp, 'openapi-sample.json');
   const doc = getSampleDoc();
   fs.writeFileSync(file, JSON.stringify(doc, null, 2), 'utf-8');
   return file;
@@ -26,6 +34,136 @@ export function ensureProjectTemp(subdir: string = 'fixtures'): string {
   const dir = path.resolve(base, subdir);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+/**
+ * 创建并清空项目根目录 temp 下的子目录
+ * @param subdir 子目录名
+ * @returns 临时目录绝对路径
+ */
+export function createCleanProjectTemp(subdir: string): string {
+  const dir = ensureProjectTemp(subdir);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * 创建 TypeScript 生成测试的基础配置
+ * @param output 输出目录
+ * @param overrides 覆盖配置
+ * @returns Swagger 生成配置
+ */
+export function createTsConfig(
+  output: string,
+  overrides: Partial<SwaggerConfig> = {}
+): SwaggerConfig {
+  return {
+    input: createSampleOpenAPIFile(),
+    output,
+    generator: 'typescript',
+    groupByTags: true,
+    requestStyle: 'generic',
+    options: {
+      generateModels: true,
+      generateApis: true,
+      generateIndex: true,
+      useAxios: true,
+      addComments: true,
+      prettify: true
+    },
+    importTemplate: "import { request } from '@/utils/request'",
+    ...overrides,
+    options: {
+      generateModels: true,
+      generateApis: true,
+      generateIndex: true,
+      useAxios: true,
+      addComments: true,
+      prettify: true,
+      ...overrides.options
+    }
+  } as SwaggerConfig;
+}
+
+/**
+ * 创建轻量 OpenAPI 文档
+ * @param options 文档选项
+ * @returns OpenAPI 文档
+ */
+export function createOpenApiDoc(options: {
+  paths?: SwaggerDocument['paths'];
+  schemas?: Record<string, SwaggerSchema>;
+  parameters?: SwaggerDocument['components'] extends infer C
+    ? C extends { parameters?: infer P }
+      ? P
+      : never
+    : never;
+  requestBodies?: Record<string, any>;
+}): SwaggerDocument {
+  return {
+    openapi: '3.0.0',
+    info: { title: 'Test API', version: '1.0' },
+    paths: options.paths || {},
+    components: {
+      schemas: options.schemas || {},
+      parameters: options.parameters || {},
+      requestBodies: options.requestBodies || {}
+    }
+  } as SwaggerDocument;
+}
+
+/**
+ * 创建单路径 OpenAPI 文档
+ * @param apiPath 接口路径
+ * @param method HTTP 方法
+ * @param operation 操作对象
+ * @param schemas schemas 定义
+ * @returns OpenAPI 文档
+ */
+export function createPathDoc(
+  apiPath: string,
+  method: string,
+  operation: SwaggerOperation,
+  schemas: Record<string, SwaggerSchema> = {}
+): SwaggerDocument {
+  return createOpenApiDoc({
+    paths: {
+      [apiPath]: {
+        [method]: operation
+      } as any
+    },
+    schemas
+  });
+}
+
+/**
+ * 运行完整 parser 到 generator 流水线
+ * @param config 生成配置
+ * @returns 生成上下文
+ */
+export async function runGenerator(config: SwaggerConfig): Promise<{
+  apis: ApiInfo[];
+  types: TypeInfo[];
+  grouped: Map<string, ApiInfo[]>;
+  readOutput: (relativePath: string) => string;
+}> {
+  const doc = await loadSwaggerDocument(config.input);
+  const parser = new SwaggerParser(doc, config);
+  const apis = parser.parseApis();
+  const types = parser.parseTypes();
+  const grouped = parser.groupApisByTags(apis);
+  const gen = new CodeGenerator(config);
+  await gen.generateAll(apis, types, grouped);
+
+  return {
+    apis,
+    types,
+    grouped,
+    readOutput(relativePath: string): string {
+      return fs.readFileSync(path.join(config.output, relativePath), 'utf-8');
+    }
+  };
 }
 
 /**
