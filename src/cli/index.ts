@@ -16,7 +16,7 @@ const packageJson = JSON.parse(
 
 program
   .name('swagger2api-v3')
-  .description('从 Swagger/OpenAPI 文档生成 TypeScript API 接口')
+  .description('从 OpenAPI 3.0 文档生成 TypeScript API 接口')
   .version(packageJson.version);
 
 // generate 命令
@@ -25,7 +25,7 @@ program
   .alias('gen')
   .description('根据配置文件生成 API 接口')
   .option('-c, --config <path>', '配置文件路径', '.swagger.config.json')
-  .option('-i, --input <path>', 'Swagger JSON 文件路径或 URL')
+  .option('-i, --input <path>', 'OpenAPI JSON/YAML 文件路径或 URL')
   .option('-o, --output <path>', '输出目录')
   .option('--no-types', '不生成类型文件')
   .option('--no-group', '不按标签分组')

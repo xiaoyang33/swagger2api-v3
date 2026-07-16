@@ -1,6 +1,6 @@
 {
   "$schema": "./dist/.swagger2api.schema.json",
-  "input": "http://172.50.109.244:5005/api/openapi.json",
+  "input": "https://ai-vision-care-dev.fudaft.com/api/openapi.json",
   "output": "./src/api",
   "importTemplate": "import { request } from '@/utils/request';",
   "generator": "typescript",

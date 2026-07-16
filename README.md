@@ -2,11 +2,11 @@
 
 English | [中文](./README_CN.md)
 
-A powerful command-line tool for automatically generating TypeScript or JavaScript interface code from OpenAPI 3.x / Swagger 3.0 documentation.
+A powerful command-line tool for automatically generating TypeScript or JavaScript interface code from OpenAPI 3.0 documentation.
 
 ## ✨ Features
 
-- 🚀 **Fast Generation** - Quickly generate TypeScript interface code from OpenAPI/Swagger 3.0 JSON
+- 🚀 **Fast Generation** - Quickly generate TypeScript interface code from OpenAPI 3.0 JSON or YAML
 - 📁 **Smart Grouping** - Support automatic file grouping by document tags
 - 📝 **Detailed Comments** - Automatically generate detailed comments including descriptions, parameters, and return values
 - 🎨 **Code Formatting** - Support custom formatting commands
@@ -76,11 +76,11 @@ npx swagger2api-v3 generate
 | Option                   | Type                  | Default        | Description                                                                                                                                                        |
 | ------------------------ | --------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `$schema`                | string                | -              | Local JSON Schema path for editor completion. The default points to `node_modules/swagger2api-v3/dist/.swagger2api.schema.json`                                    |
-| `input`                  | string                | -              | OpenAPI/Swagger 3.0 JSON file path or URL                                                                                                                          |
+| `input`                  | string                | -              | OpenAPI 3.0 JSON/YAML file path or URL; local and remote external `$ref` references are bundled automatically                                                      |
 | `output`                 | string                | `'./src/api'`  | Output directory for generated code                                                                                                                                |
 | `generator`              | string                | `'typescript'` | Code generator type. Supports `'typescript'` and `'javascript'`. `'javascript'` outputs `.js` files and skips type file generation                                 |
 | `groupByTags`            | boolean               | `true`         | Whether to group files by tags                                                                                                                                     |
-| `multiTagStrategy`       | 'first' \| 'all'      | `'first'`      | Grouping strategy for operations with multiple tags. `first` uses only the first tag, `all` combines all tags into one group name                                    |
+| `multiTagStrategy`       | 'first' \| 'all'      | `'first'`      | Grouping strategy for operations with multiple tags. `first` uses only the first tag, `all` combines all tags into one group name                                  |
 | `overwrite`              | boolean               | `true`         | Whether to overwrite existing files                                                                                                                                |
 | `prefix`                 | string                | `''`           | Common prefix for API paths                                                                                                                                        |
 | `importTemplate`         | string                | -              | Import statement template for request function                                                                                                                     |

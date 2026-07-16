@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { SwaggerParser } from '../src/core/parser';
 import {
   pathToFunctionName,
   toKebabCase,
@@ -16,10 +17,11 @@ import {
   getRefName,
   ensureDirectoryExists,
   removeDirectory,
+  isPathInside,
   writeFile,
   loadSwaggerDocument
 } from '../src/utils';
-import { createSampleOpenAPIFile } from './helpers';
+import { createCleanProjectTemp, createSampleOpenAPIFile } from './helpers';
 
 describe('utils', () => {
   // ─── pathToFunctionName ───
@@ -93,7 +95,8 @@ describe('utils', () => {
   });
 
   test('sanitizeTypeName handles empty string', () => {
-    expect(sanitizeTypeName('')).toBe('');
+    expect(sanitizeTypeName('')).toBe('AnonymousType');
+    expect(sanitizeTypeName('123-model')).toBe('_123Model');
   });
 
   // ─── getRefName ───
@@ -103,6 +106,7 @@ describe('utils', () => {
       'System.Menu.ListResp'
     );
     expect(getRefName('UserDto')).toBe('UserDto');
+    expect(getRefName('#/components/schemas/Foo~1Bar')).toBe('Foo/Bar');
     expect(getRefName('')).toBe('');
   });
 
@@ -119,7 +123,9 @@ describe('utils', () => {
     expect(swaggerTypeToTsType({ type: 'integer' })).toBe('number');
     expect(swaggerTypeToTsType({ type: 'number' })).toBe('number');
     expect(swaggerTypeToTsType({ type: 'boolean' })).toBe('boolean');
-    expect(swaggerTypeToTsType({ type: 'file' })).toBe('File');
+    expect(swaggerTypeToTsType({ type: 'string', format: 'binary' })).toBe(
+      'Blob'
+    );
     expect(swaggerTypeToTsType({ type: 'null' })).toBe('null');
     expect(
       swaggerTypeToTsType({ type: 'array', items: { type: 'integer' } })
@@ -135,6 +141,15 @@ describe('utils', () => {
       'number | null'
     );
     expect(swaggerTypeToTsType({ nullable: true })).toBe('any');
+  });
+
+  test('swaggerTypeToTsType handles type arrays', () => {
+    expect(swaggerTypeToTsType({ type: ['string', 'null'] })).toBe(
+      'string | null'
+    );
+    expect(swaggerTypeToTsType({ type: ['integer', 'string'] })).toBe(
+      'number | string'
+    );
   });
 
   // ─── swaggerTypeToTsType — $ref ───
@@ -155,7 +170,60 @@ describe('utils', () => {
         }
       ]
     } as any;
-    expect(swaggerTypeToTsType(schema)).toBe('ResOp<UserListRespDto>');
+    const schemas = {
+      ResOp: {
+        type: 'object',
+        properties: {
+          code: { type: 'integer' },
+          data: { type: 'object' }
+        }
+      },
+      UserListRespDto: { type: 'object', properties: {} }
+    } as any;
+    expect(swaggerTypeToTsType(schema, schemas)).toBe('ResOp<UserListRespDto>');
+  });
+
+  test('swaggerTypeToTsType keeps standard allOf inheritance as intersection', () => {
+    const schemas = {
+      Pet: {
+        type: 'object',
+        properties: { name: { type: 'string' } }
+      }
+    } as any;
+    const schema = {
+      allOf: [
+        { $ref: '#/components/schemas/Pet' },
+        { properties: { age: { type: 'integer' } } }
+      ]
+    } as any;
+
+    expect(swaggerTypeToTsType(schema, schemas)).toBe(
+      'Pet & {\n  age?: number;\n}'
+    );
+  });
+
+  test('swaggerTypeToTsType keeps own properties on generic allOf schemas', () => {
+    const schemas = {
+      ResOp: {
+        type: 'object',
+        properties: {
+          code: { type: 'integer' },
+          data: { type: 'object' }
+        }
+      },
+      User: { type: 'object', properties: { id: { type: 'string' } } }
+    } as any;
+    const schema = {
+      allOf: [
+        { $ref: '#/components/schemas/ResOp' },
+        { properties: { data: { $ref: '#/components/schemas/User' } } }
+      ],
+      properties: { traceId: { type: 'string' } }
+    } as any;
+
+    expect(swaggerTypeToTsType(schema, schemas)).toBe(
+      'ResOp<User> & {\n  traceId?: string;\n}'
+    );
   });
 
   test('swaggerTypeToTsType allOf with no ref item falls back', () => {
@@ -215,8 +283,10 @@ describe('utils', () => {
         }
       ]
     };
-    expect(swaggerTypeToTsType(schema)).toContain('ResOp<');
-    expect(swaggerTypeToTsType(schema)).toContain('extra');
+    const result = swaggerTypeToTsType(schema);
+    expect(result).toContain('ResOp &');
+    expect(result).toContain('data?: UserDto');
+    expect(result).toContain('extra?: string');
   });
 
   // ─── swaggerTypeToTsType — anyOf / oneOf ───
@@ -241,13 +311,6 @@ describe('utils', () => {
     expect(swaggerTypeToTsType(schema)).toBe('any');
   });
 
-  // ─── swaggerTypeToTsType — OpenAPI 3.1 type array ───
-  test('swaggerTypeToTsType handles OpenAPI 3.1 type array', () => {
-    expect(swaggerTypeToTsType({ type: ['string', 'null'] })).toBe(
-      'string | null'
-    );
-  });
-
   // ─── swaggerTypeToTsType — object ───
   test('swaggerTypeToTsType handles object additionalProperties', () => {
     expect(
@@ -269,6 +332,23 @@ describe('utils', () => {
 
   test('swaggerTypeToTsType handles object with no properties as Record<string, any>', () => {
     expect(swaggerTypeToTsType({ type: 'object' })).toBe('Record<string, any>');
+  });
+
+  test('swaggerTypeToTsType infers object from properties', () => {
+    expect(
+      swaggerTypeToTsType({ properties: { id: { type: 'string' } } })
+    ).toBe('{\n  id?: string;\n}');
+  });
+
+  test('swaggerTypeToTsType combines properties and additionalProperties', () => {
+    const result = swaggerTypeToTsType({
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      additionalProperties: { type: 'integer' }
+    });
+
+    expect(result).toContain('id?: string;');
+    expect(result).toContain('[key: string]: number | string | undefined;');
   });
 
   test('swaggerTypeToTsType handles nested objects', () => {
@@ -311,9 +391,9 @@ describe('utils', () => {
       '0 | 1'
     );
     expect(swaggerTypeToTsType({ enum: ['on', null] })).toBe('"on" | null');
-    expect(swaggerTypeToTsType({ type: 'string', enum: ['active', 'inactive'] })).toBe(
-      '"active" | "inactive"'
-    );
+    expect(
+      swaggerTypeToTsType({ type: 'string', enum: ['active', 'inactive'] })
+    ).toBe('"active" | "inactive"');
     expect(swaggerTypeToTsType({ enum: ["can't", 'c\\d'] })).toBe(
       '"can\'t" | "c\\\\d"'
     );
@@ -331,7 +411,7 @@ describe('utils', () => {
     expect(swaggerTypeToTsType(schema, schemas)).toBe('List[]');
   });
 
-  test('swaggerTypeToTsType handles bare ref to array schema and avoids [][]', () => {
+  test('swaggerTypeToTsType keeps array component refs as aliases', () => {
     const schemas = {
       MenuListRespDto: {
         type: 'array',
@@ -340,7 +420,7 @@ describe('utils', () => {
     } as any;
 
     expect(swaggerTypeToTsType({ $ref: 'MenuListRespDto' }, schemas)).toBe(
-      'MenuListRespDto[]'
+      'MenuListRespDto'
     );
 
     const schema = {
@@ -394,7 +474,17 @@ describe('utils', () => {
         }
       }
     } as any;
-    expect(getResponseType(responses)).toBe('ResOp<LoginRespDto>');
+    const schemas = {
+      ResOp: {
+        type: 'object',
+        properties: {
+          code: { type: 'integer' },
+          data: { type: 'object' }
+        }
+      },
+      LoginRespDto: { type: 'object', properties: {} }
+    } as any;
+    expect(getResponseType(responses, schemas)).toBe('ResOp<LoginRespDto>');
   });
 
   test('getResponseType uses json-like content and schemas context', () => {
@@ -415,7 +505,7 @@ describe('utils', () => {
       }
     };
 
-    expect(getResponseType(responses, schemas)).toBe('ListResp[]');
+    expect(getResponseType(responses, schemas)).toBe('ListResp');
   });
 
   test('getResponseType returns void for No Content', () => {
@@ -433,17 +523,26 @@ describe('utils', () => {
   test('getResponseType falls back to 201 then 2xx then default', () => {
     expect(
       getResponseType({
-        201: { description: 'created', content: { 'application/json': { schema: { type: 'string' } } } }
+        201: {
+          description: 'created',
+          content: { 'application/json': { schema: { type: 'string' } } }
+        }
       })
     ).toBe('string');
     expect(
       getResponseType({
-        202: { description: 'accepted', content: { 'application/json': { schema: { type: 'boolean' } } } }
+        202: {
+          description: 'accepted',
+          content: { 'application/json': { schema: { type: 'boolean' } } }
+        }
       })
     ).toBe('boolean');
     expect(
       getResponseType({
-        default: { description: 'ok', content: { 'application/json': { schema: { type: 'number' } } } }
+        default: {
+          description: 'ok',
+          content: { 'application/json': { schema: { type: 'number' } } }
+        }
       })
     ).toBe('number');
   });
@@ -474,8 +573,7 @@ describe('utils', () => {
 
   // ─── file operations ───
   test('ensureDirectoryExists, writeFile, removeDirectory', () => {
-    const tmp = path.resolve(__dirname, '../temp', 'utils');
-    fs.rmSync(tmp, { recursive: true, force: true });
+    const tmp = createCleanProjectTemp('utils');
     const dir = path.join(tmp, 'nested');
     const file = path.join(dir, 'a.txt');
     ensureDirectoryExists(dir);
@@ -487,18 +585,112 @@ describe('utils', () => {
   });
 
   test('removeDirectory handles non-existent directory', () => {
-    expect(() => removeDirectory('/non/existent/path')).not.toThrow();
+    const missingPath = path.join(
+      createCleanProjectTemp('utils-missing'),
+      'missing'
+    );
+    expect(() => removeDirectory(missingPath)).not.toThrow();
+  });
+
+  test('isPathInside only accepts strict child paths', () => {
+    const parent = path.resolve(__dirname, '../temp/path-parent');
+
+    expect(isPathInside(parent, path.join(parent, 'child'))).toBe(true);
+    expect(isPathInside(parent, parent)).toBe(false);
+    expect(isPathInside(parent, path.resolve(parent, '..'))).toBe(false);
   });
 
   // ─── loadSwaggerDocument ───
   test('loadSwaggerDocument loads local file', async () => {
     const docPath = createSampleOpenAPIFile();
     const doc = await loadSwaggerDocument(docPath);
-    expect(doc.openapi).toBeDefined();
-    expect(doc.paths).toBeDefined();
+    expect(doc.openapi).toBe('3.0.0');
+    expect(doc.paths).toHaveProperty('/admin/auth/login');
   });
 
   test('loadSwaggerDocument throws for non-existent file', async () => {
-    await expect(loadSwaggerDocument('/non/existent/file.json')).rejects.toThrow();
+    const missingPath = path.join(
+      createCleanProjectTemp('missing-document'),
+      'openapi.json'
+    );
+    await expect(loadSwaggerDocument(missingPath)).rejects.toThrow();
+  });
+
+  test('loadSwaggerDocument bundles external refs into the document', async () => {
+    const tmp = createCleanProjectTemp('external-ref');
+    const modelsPath = path.join(tmp, 'models.json');
+    const documentPath = path.join(tmp, 'openapi.json');
+    fs.writeFileSync(
+      modelsPath,
+      JSON.stringify({
+        User: {
+          type: 'object',
+          properties: { id: { type: 'string' } }
+        }
+      }),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      documentPath,
+      JSON.stringify({
+        openapi: '3.0.3',
+        info: { title: 'External Ref', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: {
+              responses: {
+                200: {
+                  description: 'ok',
+                  content: {
+                    'application/json': {
+                      schema: { $ref: './models.json#/User' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        components: {
+          schemas: {
+            User: { $ref: './models.json#/User' }
+          }
+        }
+      }),
+      'utf-8'
+    );
+
+    const document = await loadSwaggerDocument(documentPath);
+    expect(document.components?.schemas?.User).toEqual(
+      expect.objectContaining({
+        type: 'object',
+        properties: { id: { type: 'string' } }
+      })
+    );
+    const parser = new SwaggerParser(document, {
+      input: documentPath,
+      output: path.join(tmp, 'api'),
+      generator: 'typescript',
+      groupByTags: false
+    });
+    expect(parser.parseApis()[0].responseType).toBe('User');
+  });
+
+  test('loadSwaggerDocument loads OpenAPI 3.1 documents', async () => {
+    const tmp = createCleanProjectTemp('openapi-31-document');
+    const documentPath = path.join(tmp, 'openapi.json');
+    fs.writeFileSync(
+      documentPath,
+      JSON.stringify({
+        openapi: '3.1.0',
+        info: { title: 'OpenAPI 3.1', version: '1.0.0' },
+        paths: {}
+      }),
+      'utf-8'
+    );
+
+    await expect(loadSwaggerDocument(documentPath)).resolves.toEqual(
+      expect.objectContaining({ openapi: '3.1.0' })
+    );
   });
 });

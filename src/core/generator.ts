@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { SwaggerConfig, ApiInfo, TypeInfo, SwaggerSchema } from '../types';
+import { SwaggerConfig, ApiInfo, TypeInfo } from '../types';
 import {
   writeFile,
   ensureDirectoryExists,
@@ -11,11 +11,16 @@ import {
   sanitizeFilename,
   toKebabCase,
   toCamelCase,
-  swaggerTypeToTsType,
   formatTsPropertyName,
+  stripNullFromUnion,
   isValidIdentifier,
+  isPathInside,
   logger
 } from '../utils';
+import {
+  collectQueryParameterModelTypes,
+  generateQueryParameterTypes
+} from './query-parameter-generator';
 
 const execPromise = promisify(exec);
 
@@ -24,9 +29,15 @@ const execPromise = promisify(exec);
  */
 export class CodeGenerator {
   private config: SwaggerConfig;
+  private readonly outputRoot: string;
 
+  /**
+   * 创建代码生成器
+   * @param config 生成配置
+   */
   constructor(config: SwaggerConfig) {
     this.config = config;
+    this.outputRoot = path.resolve(config.output);
   }
 
   /**
@@ -40,21 +51,40 @@ export class CodeGenerator {
     types: TypeInfo[],
     groupedApis: Map<string, ApiInfo[]>
   ): Promise<void> {
+    this.assertSafeOutputDirectory();
+    if (
+      this.config.options?.generateApis !== false &&
+      this.config.groupByTags
+    ) {
+      this.validateTagFolders(groupedApis);
+    }
+
     // 根据overwrite配置决定是否清空目录
     if (this.config.overwrite !== false) {
       // 默认为true，清空输出目录
-      removeDirectory(this.config.output);
+      removeDirectory(this.outputRoot);
     }
 
     // 确保输出目录存在
-    ensureDirectoryExists(this.config.output);
+    ensureDirectoryExists(this.outputRoot);
 
     // 生成类型文件（仅在 TypeScript 模式下生成）
     if (
       this.config.generator === 'typescript' &&
       this.config.options?.generateModels !== false
     ) {
-      await this.generateTypesFile(types);
+      const rootTypes = this.config.groupByTags
+        ? types
+        : this.config.options?.generateApis === false
+          ? types
+          : this.mergeTypeDefinitions(
+              types,
+              generateQueryParameterTypes(
+                apis,
+                types.map((type) => type.name)
+              )
+            );
+      await this.generateTypesFile(rootTypes);
     }
 
     // 生成API文件
@@ -83,7 +113,7 @@ export class CodeGenerator {
    */
   private async generateTypesFile(types: TypeInfo[]): Promise<void> {
     const content = this.generateTypesContent(types);
-    const filePath = path.join(this.config.output, 'types.ts');
+    const filePath = this.resolveOutputPath('types.ts');
     this.writeGeneratedFile(filePath, content);
   }
 
@@ -100,29 +130,87 @@ export class CodeGenerator {
       ' */'
     ]);
 
-    const typeDefinitions = types
+    const typeDefinitions = this.renderTypeDefinitions(types);
+
+    return `${header}\n\n${typeDefinitions}\n`;
+  }
+
+  /**
+   * 渲染类型定义列表
+   * @param types 类型定义数组
+   * @returns 类型定义内容
+   */
+  private renderTypeDefinitions(types: TypeInfo[]): string {
+    return types
       .map((type) => {
         const comment = type.description
           ? `/**\n * ${type.description}\n */\n`
           : '';
 
-        // 通用处理：检测通用响应容器类型并转换为泛型接口
-        let definition = type.definition;
-        if (this.isGenericResponseContainer(type, definition)) {
-          const typeName = type.name;
-          definition = definition
-            .replace(
-              `export interface ${typeName} {`,
-              `export interface ${typeName}<T = Record<string, any>> {`
-            )
-            .replace('data: Record<string, any>;', 'data: T;');
-        }
-
-        return `${comment}${definition}`;
+        return `${comment}${type.definition}`;
       })
       .join('\n\n');
+  }
 
-    return `${header}\n\n${typeDefinitions}\n`;
+  /**
+   * 合并类型定义
+   * @param modelTypes 组件模型类型
+   * @param parameterTypes 查询参数类型
+   * @returns 合并后的类型定义
+   */
+  private mergeTypeDefinitions(
+    modelTypes: TypeInfo[],
+    parameterTypes: TypeInfo[]
+  ): TypeInfo[] {
+    return [...modelTypes, ...parameterTypes];
+  }
+
+  /**
+   * 判断是否应提取查询参数类型
+   * @returns 是否提取查询参数类型
+   */
+  private shouldExtractQueryParameterTypes(): boolean {
+    return (
+      this.config.generator === 'typescript' &&
+      this.config.options?.generateModels !== false
+    );
+  }
+
+  /**
+   * 生成 tag 内的查询参数类型文件
+   * @param folderName tag 目录名
+   * @param apis 当前 tag 的 API 接口
+   * @param modelTypes 组件模型类型
+   */
+  private generateTagParameterTypesFile(
+    folderName: string,
+    apis: ApiInfo[],
+    modelTypes: TypeInfo[]
+  ): void {
+    const parameterTypes = generateQueryParameterTypes(
+      apis,
+      modelTypes.map((type) => type.name)
+    );
+    if (parameterTypes.length === 0) return;
+
+    const usedModelTypes = collectQueryParameterModelTypes(apis, modelTypes);
+    const content: string[] = [
+      this.generateHeader([
+        '/**',
+        ' * API 查询参数类型',
+        ' * 此文件由 swagger2api-v3 自动生成，请勿手动修改',
+        ' */'
+      ])
+    ];
+    if (usedModelTypes.length > 0) {
+      content.push(
+        `import type { ${usedModelTypes.join(', ')} } from '../../types';`
+      );
+    }
+    content.push('', this.renderTypeDefinitions(parameterTypes), '');
+
+    const filePath = this.resolveOutputPath(folderName, 'types', 'index.ts');
+    this.writeGeneratedFile(filePath, content.join('\n'));
   }
 
   /**
@@ -136,10 +224,14 @@ export class CodeGenerator {
   ): Promise<void> {
     for (const [tag, apis] of groupedApis) {
       const folderName = this.getTagFileName(tag);
-      const tagFolderPath = path.join(this.config.output, folderName);
+      const tagFolderPath = this.resolveOutputPath(folderName);
 
       // 确保tag文件夹存在
       ensureDirectoryExists(tagFolderPath);
+
+      if (this.shouldExtractQueryParameterTypes()) {
+        this.generateTagParameterTypesFile(folderName, apis, types);
+      }
 
       const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
       const filePath = path.join(tagFolderPath, `index.${ext}`);
@@ -159,7 +251,7 @@ export class CodeGenerator {
     types: TypeInfo[]
   ): Promise<void> {
     const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
-    const filePath = path.join(this.config.output, `api.${ext}`);
+    const filePath = this.resolveOutputPath(`api.${ext}`);
     const content = this.generateApiFileContent(apis, types);
 
     this.writeGeneratedFile(filePath, content);
@@ -189,25 +281,58 @@ export class CodeGenerator {
       ]),
       importTemplate + ';'
     ];
+    const extractQueryParameterTypes = this.shouldExtractQueryParameterTypes();
+    const queryParameterTypes = extractQueryParameterTypes
+      ? generateQueryParameterTypes(
+          apis,
+          types.map((type) => type.name)
+        )
+      : [];
+    const queryParameterTypeNames = queryParameterTypes.map(
+      (type) => type.name
+    );
 
     // 收集当前文件实际使用的类型
-    const usedTypes = this.collectUsedTypes(apis, types); // 传入 types
+    const usedTypes = this.collectUsedTypes(
+      apis,
+      types,
+      extractQueryParameterTypes
+    );
+    const queryParameterTypeByApi = new Map(
+      queryParameterTypes.map((type) => [type.api, type.name])
+    );
 
     // 添加类型导入（仅在 TypeScript 且生成类型文件时）
     if (
       this.config.generator === 'typescript' &&
       this.config.options?.generateModels !== false &&
-      usedTypes.length > 0
+      (usedTypes.length > 0 || (!tag && queryParameterTypeNames.length > 0))
     ) {
-      const typeNames = usedTypes.join(', ');
+      const typeNames = Array.from(
+        new Set([...usedTypes, ...(tag ? [] : queryParameterTypeNames)])
+      )
+        .sort()
+        .join(', ');
       const typesPath = tag ? '../types' : './types';
       header.push(`import type { ${typeNames} } from '${typesPath}';`);
+    }
+
+    if (tag && queryParameterTypeNames.length > 0) {
+      const typeNames = queryParameterTypeNames.sort().join(', ');
+      header.push(`import type { ${typeNames} } from './types';`);
     }
 
     header.push('');
 
     const apiImplementations = apis
-      .map((api) => this.generateApiFunction(api))
+      .map((api) =>
+        this.generateApiFunction(
+          api,
+          extractQueryParameterTypes
+            ? queryParameterTypeByApi.get(api)
+            : undefined
+        )
+      )
       .join('\n\n');
 
     return `${header.join('\n')}${apiImplementations}\n`;
@@ -216,15 +341,24 @@ export class CodeGenerator {
   /**
    * 生成单个API函数
    * @param api API接口信息
+   * @param queryParameterTypeName 查询参数类型名
    * @returns API函数代码
    */
-  private generateApiFunction(api: ApiInfo): string {
+  private generateApiFunction(
+    api: ApiInfo,
+    queryParameterTypeName?: string
+  ): string {
     const parts: string[] = [];
 
     // 生成注释
     if (this.config.options?.addComments !== false) {
+      const pathParameterNames = this.createPathParameterNames(
+        api.parameters.filter((parameter) => parameter.in === 'path')
+      );
+      let pathParameterIndex = 0;
       const swaggerParams = api.parameters.map((p) => ({
-        name: p.name,
+        name:
+          p.in === 'path' ? pathParameterNames[pathParameterIndex++] : p.name,
         in: p.in,
         required: p.required,
         type: p.type,
@@ -249,7 +383,8 @@ export class CodeGenerator {
     // 生成直接参数形式
     const functionParams = this.generateDirectParameters(
       swaggerParameters,
-      this.config.generator === 'javascript'
+      this.config.generator === 'javascript',
+      queryParameterTypeName
     );
     const responseType =
       this.config.options?.generateModels === false
@@ -285,37 +420,47 @@ export class CodeGenerator {
   /**
    * 生成直接参数形式
    * @param parameters OpenAPI 参数数组
+   * @param isJavaScript 是否生成 JavaScript 参数
+   * @param queryParameterTypeName 查询参数类型名
    * @returns 函数参数字符串
    */
   private generateDirectParameters(
     parameters: any[],
-    isJavaScript: boolean = false
+    isJavaScript: boolean = false,
+    queryParameterTypeName?: string
   ): string {
     const params: string[] = [];
 
     const queryParams = parameters.filter((p) => p.in === 'query');
     const pathParams = parameters.filter((p) => p.in === 'path');
     const bodyParams = parameters.filter((p) => p.in === 'body');
+    const bodyParam = bodyParams[0];
+    const hasRequiredBody = bodyParam?.required === true;
+    const pathParameterNames = this.createPathParameterNames(pathParams);
 
-    // 合并路径参数和查询参数为一个params对象
-    const allParams = [...pathParams, ...queryParams];
-    if (allParams.length > 0) {
+    pathParams.forEach((parameter, index) => {
+      const parameterName = pathParameterNames[index];
+      if (isJavaScript) {
+        params.push(parameterName);
+      } else {
+        params.push(
+          `${parameterName}: ${this.getSafeGeneratedType(parameter.type)}`
+        );
+      }
+    });
+
+    if (queryParams.length > 0) {
       if (isJavaScript) {
         params.push('params');
       } else {
-        const paramType = allParams
-          .map((p) => {
-            const optional = p.required ? '' : '?';
-            const type = this.getSafeGeneratedType(p.type);
-            return `${formatTsPropertyName(p.name)}${optional}: ${type}`;
-          })
-          .join(', ');
-
-        // 检查是否所有参数都是可选的
-        const allOptional = allParams.every((p) => !p.required);
-        const optionalModifier = allOptional ? '?' : '';
-
-        params.push(`params${optionalModifier}: { ${paramType} }`);
+        const allOptional = queryParams.every((p) => !p.required);
+        const optionalModifier = allOptional && !hasRequiredBody ? '?' : '';
+        if (queryParameterTypeName) {
+          params.push(`params${optionalModifier}: ${queryParameterTypeName}`);
+        } else {
+          const paramType = this.renderInlineQueryParameterMembers(queryParams);
+          params.push(`params${optionalModifier}: { ${paramType} }`);
+        }
       }
     }
 
@@ -324,11 +469,11 @@ export class CodeGenerator {
       if (isJavaScript) {
         params.push('data');
       } else {
-        const bodyParam = bodyParams[0];
-        const bodyType = bodyParam.schema
-          ? this.getTypeFromSchema(bodyParam.schema)
-          : bodyParam.type;
-        params.push(`data: ${this.getSafeGeneratedType(bodyType)}`);
+        const bodyType = bodyParam.type;
+        const optionalModifier = bodyParam.required ? '' : '?';
+        params.push(
+          `data${optionalModifier}: ${this.getSafeGeneratedType(bodyType)}`
+        );
       }
     }
 
@@ -336,19 +481,6 @@ export class CodeGenerator {
     params.push(isJavaScript ? 'config' : 'config?: any');
 
     return params.join(', ');
-  }
-
-  /**
-   * 从schema获取类型
-   * @param schema Swagger schema
-   * @returns 类型字符串
-   */
-  private getTypeFromSchema(schema: SwaggerSchema): string {
-    if (this.config.options?.generateModels === false) {
-      return 'any';
-    }
-
-    return swaggerTypeToTsType(schema);
   }
 
   /**
@@ -363,14 +495,34 @@ export class CodeGenerator {
   }
 
   /**
+   * 渲染内联查询参数类型成员
+   * @param parameters 查询参数数组
+   * @returns 内联类型成员
+   */
+  private renderInlineQueryParameterMembers(
+    parameters: ApiInfo['parameters']
+  ): string {
+    return parameters
+      .map((parameter) => {
+        const optional = parameter.required ? '' : '?';
+        let type = this.getSafeGeneratedType(parameter.type);
+        if (optional) type = stripNullFromUnion(type);
+        return `${formatTsPropertyName(parameter.name)}${optional}: ${type}`;
+      })
+      .join(', ');
+  }
+
+  /**
    * 收集API数组中实际使用的类型
    * @param apis API接口数组
    * @param definedTypes 已定义的类型数组
+   * @param excludeQueryParameters 是否排除查询参数
    * @returns 使用的类型名称数组
    */
   private collectUsedTypes(
     apis: ApiInfo[],
-    definedTypes?: TypeInfo[]
+    definedTypes?: TypeInfo[],
+    excludeQueryParameters: boolean = false
   ): string[] {
     const usedTypes = new Set<string>();
 
@@ -385,15 +537,13 @@ export class CodeGenerator {
 
       // 收集参数类型
       api.parameters.forEach((param) => {
-        if (param.schema) {
-          const type = this.getTypeFromSchema(param.schema);
-          if (type && type !== 'any' && !this.isPrimitiveType(type)) {
-            this.extractTypeNames(type).forEach((typeName) => {
+        if (excludeQueryParameters && param.in === 'query') return;
+        if (param.type && param.type !== 'any') {
+          if (!this.isPrimitiveType(param.type)) {
+            this.extractTypeNames(param.type).forEach((typeName) => {
               usedTypes.add(typeName);
             });
           }
-        } else if (param.type && !this.isPrimitiveType(param.type)) {
-          usedTypes.add(param.type);
         }
       });
     });
@@ -443,37 +593,12 @@ export class CodeGenerator {
       'object',
       'array',
       'any',
+      'blob',
       'void',
       'null',
       'undefined'
     ];
     return primitiveTypes.includes(type.toLowerCase());
-  }
-
-  /**
-   * 检测是否为通用响应容器类型
-   * @param type 类型信息
-   * @param definition 类型定义
-   * @returns 是否为通用响应容器类型
-   */
-  private isGenericResponseContainer(
-    type: TypeInfo,
-    definition: string
-  ): boolean {
-    // 检查是否为接口定义
-    if (!definition.includes(`export interface ${type.name} {`)) {
-      return false;
-    }
-
-    // 检查是否包含 data 字段且类型为 Record<string, any>
-    const hasDataField = definition.includes('data: Record<string, any>;');
-
-    // 检查是否包含其他常见的响应容器字段
-    const hasCommonFields = ['code', 'message', 'success', 'status'].some(
-      (field) => new RegExp(`\\b${field}\\??:`).test(definition)
-    );
-
-    return hasDataField && hasCommonFields;
   }
 
   /**
@@ -497,29 +622,22 @@ export class CodeGenerator {
 
     const pathParams = api.parameters.filter((p) => p.in === 'path');
     const queryParams = api.parameters.filter((p) => p.in === 'query');
+    const pathParameterNames = this.createPathParameterNames(pathParams);
 
     if (pathParams.length > 0) {
-      // 替换路径参数，从params对象中获取
-      pathParams.forEach((param) => {
-        url = url.replace(`{${param.name}}`, `\${params.${param.name}}`);
+      url = this.escapeTemplateLiteral(url);
+      pathParams.forEach((param, index) => {
+        const placeholder = this.escapeTemplateLiteral(`{${param.name}}`);
+        const replacement = `\${${pathParameterNames[index]}}`;
+        url = url.split(placeholder).join(replacement);
       });
       config.push(`url: \`${url}\``);
     } else {
-      config.push(`url: '${url}'`);
+      config.push(`url: ${this.toSingleQuotedString(url)}`);
     }
 
-    // 查询参数和路径参数都从params对象中获取
     if (queryParams.length > 0) {
-      if (pathParams.length > 0) {
-        const queryEntries = queryParams.map(
-          (param) =>
-            `${JSON.stringify(param.name)}: ${this.getParamAccessExpression(param.name)}`
-        );
-        config.push(`params: { ${queryEntries.join(', ')} }`);
-      } else {
-        // 直接传递params对象，让axios自动过滤undefined值
-        config.push('params');
-      }
+      config.push('params');
     }
 
     // 请求体数据
@@ -541,14 +659,31 @@ export class CodeGenerator {
   }
 
   /**
-   * 生成 params 对象字段访问表达式
-   * @param name 参数名
-   * @returns 字段访问表达式
+   * 创建不重复的路径参数变量名
+   * @param parameters OpenAPI 路径参数
+   * @returns 路径参数变量名
    */
-  private getParamAccessExpression(name: string): string {
-    return isValidIdentifier(name)
-      ? `params.${name}`
-      : `params[${JSON.stringify(name)}]`;
+  private createPathParameterNames(
+    parameters: ApiInfo['parameters']
+  ): string[] {
+    const usedNames = new Set(['params', 'data', 'config']);
+
+    return parameters.map((parameter, index) => {
+      const normalizedName = parameter.name.replace(/[^A-Za-z0-9_$]/g, '_');
+      const baseName = isValidIdentifier(normalizedName)
+        ? normalizedName
+        : `pathParam${index + 1}`;
+      let parameterName = baseName;
+      let suffix = 2;
+
+      while (usedNames.has(parameterName)) {
+        parameterName = `${baseName}_${suffix}`;
+        suffix++;
+      }
+      usedNames.add(parameterName);
+
+      return parameterName;
+    });
   }
 
   /**
@@ -573,7 +708,9 @@ export class CodeGenerator {
         // 按标签导出
         for (const tag of groupedApis.keys()) {
           const folderName = this.getTagFileName(tag);
-          exports.push(`export * from './${folderName}';`);
+          exports.push(
+            `export * from ${this.toSingleQuotedString(`./${folderName}`)};`
+          );
         }
       } else {
         // 导出单个API文件
@@ -584,8 +721,37 @@ export class CodeGenerator {
     const content = [this.generateHeader(), '', ...exports, ''].join('\n');
 
     const ext = this.config.generator === 'javascript' ? 'js' : 'ts';
-    const filePath = path.join(this.config.output, `index.${ext}`);
+    const filePath = this.resolveOutputPath(`index.${ext}`);
     this.writeGeneratedFile(filePath, content);
+  }
+
+  /**
+   * 校验输出目录不会覆盖当前工作目录或其父目录
+   */
+  private assertSafeOutputDirectory(): void {
+    const currentDirectory = path.resolve(process.cwd());
+
+    if (
+      this.outputRoot === currentDirectory ||
+      isPathInside(this.outputRoot, currentDirectory)
+    ) {
+      throw new Error('输出目录不能是当前工作目录或其父目录');
+    }
+  }
+
+  /**
+   * 解析并校验输出目录内的文件路径
+   * @param segments 输出目录下的路径片段
+   * @returns 安全的绝对路径
+   */
+  private resolveOutputPath(...segments: string[]): string {
+    const targetPath = path.resolve(this.outputRoot, ...segments);
+
+    if (!isPathInside(this.outputRoot, targetPath)) {
+      throw new Error(`生成路径超出输出目录: ${targetPath}`);
+    }
+
+    return targetPath;
   }
 
   /**
@@ -608,17 +774,79 @@ export class CodeGenerator {
    */
   private getTagFileName(tag: string): string {
     const cleanTag = sanitizeFilename(tag);
+    let folderName: string;
 
     switch (this.config.tagGrouping?.fileNaming) {
       case 'camelCase':
-        return toCamelCase(cleanTag);
+        folderName = toCamelCase(cleanTag);
+        break;
       case 'kebab-case':
-        return toKebabCase(cleanTag);
+        folderName = toKebabCase(cleanTag);
+        break;
       case 'tag':
-        return cleanTag.toLowerCase();
+        folderName = cleanTag.toLowerCase();
+        break;
       default:
-        return toCamelCase(cleanTag);
+        folderName = toCamelCase(cleanTag);
+        break;
     }
+
+    if (!folderName || folderName === '.' || folderName === '..') {
+      throw new Error(`无效的标签名称: ${JSON.stringify(tag)}`);
+    }
+
+    return folderName;
+  }
+
+  /**
+   * 校验所有标签生成的目录名称安全且不重复
+   * @param groupedApis 按标签分组的 API
+   */
+  private validateTagFolders(groupedApis: Map<string, ApiInfo[]>): void {
+    const folderOwners = new Map<string, string>();
+
+    for (const tag of groupedApis.keys()) {
+      const folderName = this.getTagFileName(tag);
+      const normalizedFolderName = folderName.toLowerCase();
+      const existingTag = folderOwners.get(normalizedFolderName);
+
+      if (existingTag !== undefined && existingTag !== tag) {
+        throw new Error(
+          `标签目录名称冲突: ${existingTag} 和 ${tag} 都会生成 ${folderName}`
+        );
+      }
+
+      folderOwners.set(normalizedFolderName, tag);
+    }
+  }
+
+  /**
+   * 转义模板字符串中的特殊字符
+   * @param value 原始字符串
+   * @returns 可安全写入模板字符串的内容
+   */
+  private escapeTemplateLiteral(value: string): string {
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$\{/g, '\\${');
+  }
+
+  /**
+   * 将字符串转换为安全的单引号字面量
+   * @param value 原始字符串
+   * @returns 单引号字符串字面量
+   */
+  private toSingleQuotedString(value: string): string {
+    const escapedValue = value
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029');
+
+    return `'${escapedValue}'`;
   }
 
   /**

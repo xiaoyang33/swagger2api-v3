@@ -1,13 +1,15 @@
 import * as path from 'path';
 import { SwaggerParser } from '../src/core/parser';
 import { loadSwaggerDocument } from '../src/utils';
-import { SwaggerConfig } from '../src/types';
+import { ApiInfo, SwaggerConfig } from '../src/types';
 import { createOpenApiDoc, createSampleOpenAPIFile } from './helpers';
 
 describe('parser', () => {
   let config: SwaggerConfig;
+  let sampleParser: SwaggerParser;
+  let sampleApis: ApiInfo[];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const inputFile = createSampleOpenAPIFile();
     config = {
       input: inputFile,
@@ -24,15 +26,15 @@ describe('parser', () => {
         prettify: true
       }
     } as any;
+    const document = await loadSwaggerDocument(inputFile);
+    sampleParser = new SwaggerParser(document, config);
+    sampleApis = sampleParser.parseApis();
   });
 
-  test('parseApis extracts operations with names and types', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    expect(apis.length).toBeGreaterThan(0);
+  test('parseApis extracts operations with names and types', () => {
+    expect(sampleApis.length).toBeGreaterThan(0);
 
-    const loginApi = apis.find((a) => a.path === '/admin/auth/login');
+    const loginApi = sampleApis.find((a) => a.path === '/admin/auth/login');
     expect(loginApi).toBeDefined();
     expect(loginApi!.method).toBe('POST');
     expect(loginApi!.name).toBe('AuthController_loginPost');
@@ -40,19 +42,14 @@ describe('parser', () => {
     expect(loginApi!.requestBodyType).toBe('LoginDto');
   });
 
-  test('groupApisByTags groups by tag', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const grouped = parser.groupApisByTags(apis);
+  test('groupApisByTags groups by tag', () => {
+    const grouped = sampleParser.groupApisByTags(sampleApis);
     expect(grouped.size).toBeGreaterThan(0);
     expect(grouped.has('AuthController')).toBe(true);
   });
 
-  test('getTags collects tags from doc and operations', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const tags = parser.getTags();
+  test('getTags collects tags from doc and operations', () => {
+    const tags = sampleParser.getTags();
     expect(tags).toEqual(
       expect.arrayContaining([
         'AuthController',
@@ -63,10 +60,8 @@ describe('parser', () => {
     );
   });
 
-  test('getApiInfo returns document info', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const info = parser.getApiInfo();
+  test('getApiInfo returns document info', () => {
+    const info = sampleParser.getApiInfo();
     expect(info.title).toBe('template-admin');
     expect(info.version).toBe('1.0');
   });
@@ -83,11 +78,8 @@ describe('parser', () => {
     expect(parser.getBaseUrl()).toBe('');
   });
 
-  test('parseApis resolves GET/PUT/DELETE/PATCH methods', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const methods = new Set(apis.map((a) => a.method));
+  test('parseApis resolves GET/PUT/DELETE/PATCH methods', () => {
+    const methods = new Set(sampleApis.map((a) => a.method));
     expect(methods.has('GET')).toBe(true);
     expect(methods.has('POST')).toBe(true);
     expect(methods.has('PUT')).toBe(true);
@@ -95,7 +87,24 @@ describe('parser', () => {
     expect(methods.has('PATCH')).toBe(true);
   });
 
-  test('parseApis uses pathToFunctionName when no operationId', async () => {
+  test('parseApis supports OpenAPI TRACE operations', () => {
+    const doc = createOpenApiDoc({
+      paths: {
+        '/trace': {
+          trace: {
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+
+    expect(parser.parseApis()[0]).toEqual(
+      expect.objectContaining({ method: 'TRACE', path: '/trace' })
+    );
+  });
+
+  test('parseApis uses pathToFunctionName when no operationId', () => {
     const doc = {
       openapi: '3.0.0',
       info: { title: 'Test', version: '1.0' },
@@ -104,7 +113,12 @@ describe('parser', () => {
           get: {
             tags: ['User'],
             parameters: [
-              { name: 'id', in: 'path', required: true, schema: { type: 'string' } }
+              {
+                name: 'id',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              }
             ],
             responses: { 200: { description: 'ok' } }
           }
@@ -248,11 +262,8 @@ describe('parser', () => {
     expect(apis).toEqual([]);
   });
 
-  test('parseApis extracts path parameters', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const getUserApi = apis.find(
+  test('parseApis extracts path parameters', () => {
+    const getUserApi = sampleApis.find(
       (a) => a.path === '/admin/system/user/{id}' && a.method === 'GET'
     );
     expect(getUserApi).toBeDefined();
@@ -262,11 +273,8 @@ describe('parser', () => {
     expect(pathParams[0].type).toBe('string');
   });
 
-  test('parseApis extracts query parameters', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const searchApi = apis.find(
+  test('parseApis extracts query parameters', () => {
+    const searchApi = sampleApis.find(
       (a) => a.path === '/admin/system/users' && a.method === 'GET'
     );
     expect(searchApi).toBeDefined();
@@ -278,19 +286,14 @@ describe('parser', () => {
     expect(paramNames).toContain('keyword');
   });
 
-  test('parseApis returns void for 204 No Content response', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const apis = parser.parseApis();
-    const deleteApi = apis.find((a) => a.method === 'DELETE');
+  test('parseApis returns void for 204 No Content response', () => {
+    const deleteApi = sampleApis.find((a) => a.method === 'DELETE');
     expect(deleteApi).toBeDefined();
     expect(deleteApi!.responseType).toBe('void');
   });
 
-  test('getApiInfo returns baseUrl from servers', async () => {
-    const doc = await loadSwaggerDocument(config.input);
-    const parser = new SwaggerParser(doc, config);
-    const info = parser.getApiInfo();
+  test('getApiInfo returns baseUrl from servers', () => {
+    const info = sampleParser.getApiInfo();
     expect(info.baseUrl).toBe('https://dev.api.example.com/v1');
   });
 
@@ -371,8 +374,199 @@ describe('parser', () => {
     const types = parser.parseTypes();
     const status = types.find((type) => type.name === 'Status');
 
-    expect(status?.definition).toContain('VALUE_0 = "0"');
-    expect(status?.definition).toContain('VALUE_1 = "1"');
+    expect(status?.definition).toContain('VALUE_0 = 0');
+    expect(status?.definition).toContain('VALUE_1 = 1');
+  });
+
+  test('parseTypes infers objects and creates safe type and enum names', () => {
+    const doc = createOpenApiDoc({
+      schemas: {
+        '123-model': {
+          properties: {
+            id: { type: 'string' }
+          }
+        },
+        State: {
+          type: 'string',
+          enum: ['in-progress', '', 'in progress']
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+    const types = parser.parseTypes();
+
+    expect(
+      types.find((type) => type.name === '_123Model')?.definition
+    ).toContain('export interface _123Model');
+    const state = types.find((type) => type.name === 'State')?.definition || '';
+    expect(state).toContain('IN_PROGRESS = "in-progress"');
+    expect(state).toContain('VALUE_1 = ""');
+    expect(state).toContain('IN_PROGRESS_2 = "in progress"');
+  });
+
+  test('parseTypes rejects generated type name collisions', () => {
+    const doc = createOpenApiDoc({
+      schemas: {
+        'Foo.Bar': { type: 'object', properties: {} },
+        'Foo-Bar': { type: 'object', properties: {} }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+
+    expect(() => parser.parseTypes()).toThrow('Schema 类型名称冲突');
+  });
+
+  test('parseTypes creates request and response variants for access properties', () => {
+    const doc = createOpenApiDoc({
+      paths: {
+        '/users': {
+          post: {
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/User' }
+                }
+              }
+            },
+            responses: {
+              200: {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: { $ref: '#/components/schemas/User' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          required: ['id', 'password', 'createdAt'],
+          properties: {
+            id: { type: 'string' },
+            password: { type: 'string', writeOnly: true },
+            createdAt: { type: 'string', readOnly: true }
+          }
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+    const types = parser.parseTypes();
+    const [api] = parser.parseApis();
+
+    expect(types.find((type) => type.name === 'User')?.definition).toContain(
+      'readonly createdAt: string;'
+    );
+    expect(
+      types.find((type) => type.name === 'UserInput')?.definition
+    ).not.toContain('createdAt');
+    expect(
+      types.find((type) => type.name === 'UserOutput')?.definition
+    ).not.toContain('password');
+    expect(api.requestBodyType).toBe('UserInput');
+    expect(api.responseType).toBe('UserOutput');
+  });
+
+  test('parseTypes preserves nullable object components', () => {
+    const doc = createOpenApiDoc({
+      schemas: {
+        MaybeUser: {
+          type: 'object',
+          nullable: true,
+          properties: { id: { type: 'string' } }
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+    const definition = parser
+      .parseTypes()
+      .find((type) => type.name === 'MaybeUser')?.definition;
+
+    expect(definition).toBe(
+      'export type MaybeUser = {\n  id?: string;\n} | null;'
+    );
+  });
+
+  test('parseTypes keeps generic response access variants generic', () => {
+    const doc = createOpenApiDoc({
+      schemas: {
+        ResOp: {
+          type: 'object',
+          required: ['data'],
+          properties: {
+            code: { type: 'integer', readOnly: true },
+            secret: { type: 'string', writeOnly: true },
+            data: { type: 'object' }
+          }
+        },
+        User: {
+          type: 'object',
+          properties: { id: { type: 'string' } }
+        },
+        UserResult: {
+          allOf: [
+            { $ref: '#/components/schemas/ResOp' },
+            {
+              properties: {
+                data: { $ref: '#/components/schemas/User' }
+              }
+            }
+          ]
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+    const types = parser.parseTypes();
+
+    expect(
+      types.find((type) => type.name === 'ResOpInput')?.definition
+    ).toContain('export interface ResOpInput<T = Record<string, any>>');
+    expect(
+      types.find((type) => type.name === 'ResOpOutput')?.definition
+    ).toContain('export interface ResOpOutput<T = Record<string, any>>');
+    expect(
+      types.find((type) => type.name === 'UserResultInput')?.definition
+    ).toBe('export type UserResultInput = ResOpInput<User>;');
+    expect(
+      types.find((type) => type.name === 'UserResultOutput')?.definition
+    ).toBe('export type UserResultOutput = ResOpOutput<User>;');
+  });
+
+  test('parseTypes keeps discriminator oneOf schemas as a union', () => {
+    const doc = createOpenApiDoc({
+      schemas: {
+        Cat: {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['cat'] } }
+        },
+        Dog: {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['dog'] } }
+        },
+        Pet: {
+          oneOf: [
+            { $ref: '#/components/schemas/Cat' },
+            { $ref: '#/components/schemas/Dog' }
+          ],
+          discriminator: {
+            propertyName: 'kind',
+            mapping: {
+              cat: '#/components/schemas/Cat',
+              dog: '#/components/schemas/Dog'
+            }
+          }
+        }
+      }
+    });
+    const parser = new SwaggerParser(doc, config);
+
+    expect(
+      parser.parseTypes().find((type) => type.name === 'Pet')?.definition
+    ).toBe('export type Pet = Cat & { kind: "cat" } | Dog & { kind: "dog" };');
   });
 
   test('parseApis supports OpenAPI refs and non-json requestBody content', () => {
@@ -456,7 +650,7 @@ describe('parser', () => {
         expect.objectContaining({ name: 'body', type: 'UploadDto' })
       ])
     );
-    expect(api.responseType).toBe('UploadResp[]');
+    expect(api.responseType).toBe('UploadResp');
     expect(api.requestBodyType).toBe('UploadDto');
   });
 
@@ -492,6 +686,48 @@ describe('parser', () => {
     expect(api.parameters).toEqual([
       expect.objectContaining({ name: 'id', in: 'path', type: 'string' })
     ]);
+  });
+
+  test('parseApis resolves path item and response refs', () => {
+    const doc = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {
+        '/referenced': { $ref: '#/x-path-items/ReferencedPath' }
+      },
+      components: {
+        schemas: {},
+        responses: {
+          Ok: {
+            description: 'ok',
+            content: {
+              'application/json': { schema: { type: 'string' } }
+            }
+          }
+        }
+      },
+      'x-path-items': {
+        ReferencedPath: {
+          get: {
+            tags: ['Referenced'],
+            responses: {
+              200: { $ref: '#/components/responses/Ok' }
+            }
+          }
+        }
+      }
+    };
+    const parser = new SwaggerParser(doc as any, config);
+    const [api] = parser.parseApis();
+
+    expect(api).toEqual(
+      expect.objectContaining({
+        path: '/referenced',
+        method: 'GET',
+        responseType: 'string'
+      })
+    );
+    expect(parser.getTags()).toContain('Referenced');
   });
 
   test('parseApis throws clear error for invalid local refs', () => {
@@ -534,7 +770,7 @@ describe('parser', () => {
     const parser = new SwaggerParser(doc as any, config);
 
     expect(() => parser.parseApis()).toThrow(
-      '暂不支持外部 $ref 引用: ./common.json#/components/parameters/Id'
+      '外部 $ref 需要先通过 loadSwaggerDocument 打包: ./common.json#/components/parameters/Id'
     );
   });
 
@@ -578,7 +814,7 @@ describe('parser', () => {
       paths: {
         '/loop/{id}': {
           get: {
-            parameters: [{ $ref: '#/components/parameters/LoopParam' }],
+            parameters: [{ $ref: '#/components/parameters/LoopParam' } as any],
             responses: { 200: { description: 'ok' } }
           }
         }
@@ -613,7 +849,7 @@ describe('parser', () => {
       paths: {
         '/deep/{id}': {
           get: {
-            parameters: [{ $ref: '#/components/parameters/P0' }],
+            parameters: [{ $ref: '#/components/parameters/P0' } as any],
             responses: { 200: { description: 'ok' } }
           }
         }
@@ -631,7 +867,7 @@ describe('parser', () => {
       paths: {
         '/escaped/{id}': {
           get: {
-            parameters: [{ $ref: '#/components/parameters/Foo~1Bar' }],
+            parameters: [{ $ref: '#/components/parameters/Foo~1Bar' } as any],
             responses: { 200: { description: 'ok' } }
           }
         }

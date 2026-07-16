@@ -1,7 +1,7 @@
 {
   "name": "swagger2api-v3",
   "version": "1.1.10",
-  "description": "A command-line tool for generating TypeScript API interfaces from OpenAPI 3.x / Swagger 3.0 documentation",
+  "description": "A command-line tool for generating TypeScript API interfaces from OpenAPI 3.0 documentation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
@@ -65,7 +65,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "axios": "^1.18.1",
+    "@apidevtools/swagger-parser": "^12.1.0",
     "commander": "^12.1.0"
   }
 }

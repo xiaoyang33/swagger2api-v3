@@ -3,24 +3,25 @@ import * as path from 'path';
 import { SwaggerParser } from '../src/core/parser';
 import { CodeGenerator } from '../src/core/generator';
 import { loadSwaggerDocument } from '../src/utils';
-import {
-  ApiInfo,
-  SwaggerConfig,
-  SwaggerDocument,
-  SwaggerOperation,
-  SwaggerSchema,
-  TypeInfo
-} from '../src/types';
+import { SwaggerConfig, SwaggerDocument, SwaggerSchema } from '../src/types';
+
+let sampleOpenApiFile: string | undefined;
 
 /**
  * 创建临时 OpenAPI JSON 文件并返回路径
  * @returns 临时文件绝对路径
  */
 export function createSampleOpenAPIFile(): string {
+  if (sampleOpenApiFile && fs.existsSync(sampleOpenApiFile)) {
+    return sampleOpenApiFile;
+  }
+
   const tmp = ensureProjectTemp('fixtures');
-  const file = path.join(tmp, 'openapi-sample.json');
+  const workerId = process.env.JEST_WORKER_ID || 'default';
+  const file = path.join(tmp, `openapi-sample-${workerId}.json`);
   const doc = getSampleDoc();
   fs.writeFileSync(file, JSON.stringify(doc, null, 2), 'utf-8');
+  sampleOpenApiFile = file;
   return file;
 }
 
@@ -29,7 +30,7 @@ export function createSampleOpenAPIFile(): string {
  * @param subdir 子目录名
  * @returns 临时目录绝对路径
  */
-export function ensureProjectTemp(subdir: string = 'fixtures'): string {
+function ensureProjectTemp(subdir: string = 'fixtures'): string {
   const base = path.resolve(__dirname, '../temp');
   const dir = path.resolve(base, subdir);
   fs.mkdirSync(dir, { recursive: true });
@@ -64,14 +65,6 @@ export function createTsConfig(
     generator: 'typescript',
     groupByTags: true,
     requestStyle: 'generic',
-    options: {
-      generateModels: true,
-      generateApis: true,
-      generateIndex: true,
-      useAxios: true,
-      addComments: true,
-      prettify: true
-    },
     importTemplate: "import { request } from '@/utils/request'",
     ...overrides,
     options: {
@@ -114,40 +107,11 @@ export function createOpenApiDoc(options: {
 }
 
 /**
- * 创建单路径 OpenAPI 文档
- * @param apiPath 接口路径
- * @param method HTTP 方法
- * @param operation 操作对象
- * @param schemas schemas 定义
- * @returns OpenAPI 文档
- */
-export function createPathDoc(
-  apiPath: string,
-  method: string,
-  operation: SwaggerOperation,
-  schemas: Record<string, SwaggerSchema> = {}
-): SwaggerDocument {
-  return createOpenApiDoc({
-    paths: {
-      [apiPath]: {
-        [method]: operation
-      } as any
-    },
-    schemas
-  });
-}
-
-/**
  * 运行完整 parser 到 generator 流水线
  * @param config 生成配置
- * @returns 生成上下文
+ * @returns 流水线完成后的 Promise
  */
-export async function runGenerator(config: SwaggerConfig): Promise<{
-  apis: ApiInfo[];
-  types: TypeInfo[];
-  grouped: Map<string, ApiInfo[]>;
-  readOutput: (relativePath: string) => string;
-}> {
+export async function runGenerator(config: SwaggerConfig): Promise<void> {
   const doc = await loadSwaggerDocument(config.input);
   const parser = new SwaggerParser(doc, config);
   const apis = parser.parseApis();
@@ -155,15 +119,6 @@ export async function runGenerator(config: SwaggerConfig): Promise<{
   const grouped = parser.groupApisByTags(apis);
   const gen = new CodeGenerator(config);
   await gen.generateAll(apis, types, grouped);
-
-  return {
-    apis,
-    types,
-    grouped,
-    readOutput(relativePath: string): string {
-      return fs.readFileSync(path.join(config.output, relativePath), 'utf-8');
-    }
-  };
 }
 
 /**
@@ -180,7 +135,7 @@ export async function runGenerator(config: SwaggerConfig): Promise<{
  * - 多种 schema 类型：object、array、string enum、numeric enum、nullable、oneOf、anyOf、additionalProperties
  * - Server URL 变量替换
  */
-export function getSampleDoc() {
+function getSampleDoc() {
   return {
     openapi: '3.0.0',
     info: { title: 'template-admin', version: '1.0' },
@@ -277,9 +232,7 @@ export function getSampleDoc() {
 
       // ─── /admin/system/user/{id} ─── GET / PUT / DELETE（路径参数）
       '/admin/system/user/{id}': {
-        parameters: [
-          { $ref: '#/components/parameters/UserIdParam' }
-        ],
+        parameters: [{ $ref: '#/components/parameters/UserIdParam' }],
         get: {
           tags: ['UserController'],
           summary: '获取用户详情',
@@ -347,8 +300,17 @@ export function getSampleDoc() {
           tags: ['UserController'],
           summary: '搜索用户',
           parameters: [
-            { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-            { name: 'pageSize', in: 'query', required: true, schema: { type: 'integer' } },
+            {
+              name: 'page',
+              in: 'query',
+              schema: { type: 'integer', default: 1 }
+            },
+            {
+              name: 'pageSize',
+              in: 'query',
+              required: true,
+              schema: { type: 'integer' }
+            },
             { name: 'keyword', in: 'query', schema: { type: 'string' } }
           ],
           responses: {
@@ -363,7 +325,9 @@ export function getSampleDoc() {
                         properties: {
                           data: {
                             type: 'array',
-                            items: { $ref: '#/components/schemas/UserDetailRespDto' }
+                            items: {
+                              $ref: '#/components/schemas/UserDetailRespDto'
+                            }
                           }
                         }
                       }

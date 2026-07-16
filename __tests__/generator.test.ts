@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SwaggerConfig } from '../src/types';
+import { CodeGenerator } from '../src/core/generator';
 import {
   createCleanProjectTemp,
   createOpenApiDoc,
@@ -8,25 +8,7 @@ import {
   runGenerator
 } from './helpers';
 
-/**
- * 创建生成器基础测试配置
- * @param outputDir 输出目录
- * @returns Swagger 配置
- */
-function createBaseConfig(outputDir: string): SwaggerConfig {
-  return createTsConfig(outputDir);
-}
-
 describe('generator', () => {
-  /**
-   * 创建并清空生成器测试目录
-   * @param subdir 子目录名
-   * @returns 临时目录路径
-   */
-  function mkProjectTemp(subdir: string): string {
-    return createCleanProjectTemp(subdir);
-  }
-
   /**
    * 写入 OpenAPI 文档到项目 temp 目录
    * @param outputDir 输出目录
@@ -41,8 +23,8 @@ describe('generator', () => {
   }
 
   test('generates TS grouped files including types and index', async () => {
-    const tmp = mkProjectTemp('gen-ts');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-ts');
+    const config = createTsConfig(tmp);
 
     await runGenerator(config);
 
@@ -74,8 +56,8 @@ describe('generator', () => {
   });
 
   test('generates JS files without types and uses method in config', async () => {
-    const tmp = mkProjectTemp('gen-js');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-js');
+    const config = createTsConfig(tmp);
     config.generator = 'javascript';
 
     await runGenerator(config);
@@ -98,8 +80,8 @@ describe('generator', () => {
   });
 
   test('generates single api file when not grouped', async () => {
-    const tmp = mkProjectTemp('gen-single');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-single');
+    const config = createTsConfig(tmp);
     config.groupByTags = false;
 
     await runGenerator(config);
@@ -109,8 +91,8 @@ describe('generator', () => {
   });
 
   test('uses custom headerComment for generated files', async () => {
-    const tmp = mkProjectTemp('gen-header');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-header');
+    const config = createTsConfig(tmp);
     config.headerComment = '/**\n * Custom generated header\n */';
 
     await runGenerator(config);
@@ -123,8 +105,8 @@ describe('generator', () => {
   });
 
   test('generates method-style request (request.get/post) when requestStyle is method', async () => {
-    const tmp = mkProjectTemp('gen-method-style');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-method-style');
+    const config = createTsConfig(tmp);
     config.requestStyle = 'method';
 
     await runGenerator(config);
@@ -137,20 +119,108 @@ describe('generator', () => {
   });
 
   test('generates path parameter template string correctly', async () => {
-    const tmp = mkProjectTemp('gen-path-params');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-path-params');
+    const config = createTsConfig(tmp);
 
     await runGenerator(config);
 
     const userDir = path.join(tmp, 'userController');
     const tagContent = fs.readFileSync(path.join(userDir, 'index.ts'), 'utf-8');
     // 路径参数应生成模板字符串
-    expect(tagContent).toMatch(/url: `.*\$\{params\./);
+    expect(tagContent).toMatch(/url: `.*\$\{[A-Za-z_$][A-Za-z0-9_$]*\}/);
+  });
+
+  test('generates multiple path parameters as independent arguments', async () => {
+    const tmp = createCleanProjectTemp('gen-multiple-path-params');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/organizations/{organization_id}/users/{user_id}': {
+          get: {
+            operationId: 'getOrganizationUser',
+            parameters: [
+              {
+                name: 'organization_id',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              },
+              {
+                name: 'user_id',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              },
+              {
+                name: 'include_roles',
+                in: 'query',
+                schema: { type: 'boolean' }
+              }
+            ],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const config = createTsConfig(tmp);
+    config.input = writeDoc(tmp, 'multiple-path-params.json', doc);
+    config.groupByTags = false;
+
+    await runGenerator(config);
+
+    const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
+    expect(apiContent).toContain(
+      'getOrganizationUserGet = (organization_id: string, user_id: string, params?: GetOrganizationUserGetParams, config?: any)'
+    );
+    expect(apiContent).toContain(
+      'url: `/organizations/${organization_id}/users/${user_id}`'
+    );
+    expect(apiContent).toContain('\n    params,\n');
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+    expect(typesContent).toContain(
+      'export interface GetOrganizationUserGetParams'
+    );
+    expect(typesContent).toContain('include_roles?: boolean;');
+  });
+
+  test('adds a numeric suffix when a query parameter type name is occupied', async () => {
+    const tmp = createCleanProjectTemp('gen-parameter-type-collision');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/search': {
+          get: {
+            operationId: 'search',
+            parameters: [
+              {
+                name: 'keyword',
+                in: 'query',
+                schema: { type: 'string' }
+              }
+            ],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      },
+      schemas: {
+        SearchGetParams: { type: 'object', properties: {} },
+        SearchGetParams1: { type: 'object', properties: {} }
+      }
+    });
+    const config = createTsConfig(tmp);
+    config.input = writeDoc(tmp, 'parameter-type-collision.json', doc);
+    config.groupByTags = false;
+
+    await runGenerator(config);
+
+    const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+    expect(apiContent).toContain('params?: SearchGetParams2');
+    expect(typesContent).toContain('export interface SearchGetParams2');
+    expect(typesContent).toContain('keyword?: string;');
   });
 
   test('generates query parameters with params shorthand', async () => {
-    const tmp = mkProjectTemp('gen-query-params');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-query-params');
+    const config = createTsConfig(tmp);
 
     await runGenerator(config);
 
@@ -160,19 +230,29 @@ describe('generator', () => {
     const searchFn = tagContent.match(/export const \w+Search\w+ = [\s\S]*?\}/);
     expect(searchFn).not.toBeNull();
     expect(searchFn![0]).toContain('params');
+    const parameterTypes = fs.readFileSync(
+      path.join(userDir, 'types', 'index.ts'),
+      'utf-8'
+    );
+    expect(tagContent).toContain(
+      "import type { UserControllerSearchGetParams } from './types';"
+    );
+    expect(parameterTypes).toContain(
+      'export interface UserControllerSearchGetParams'
+    );
   });
 
   test('does not include path parameters in axios query params', async () => {
-    const tmp = mkProjectTemp('gen-path-query');
+    const tmp = createCleanProjectTemp('gen-path-query');
     const doc = createOpenApiDoc({
       paths: {
-        '/users/{id}': {
+        '/users/{user-id}': {
           get: {
             operationId: 'getUser',
             tags: ['User'],
             parameters: [
               {
-                name: 'id',
+                name: 'user-id',
                 in: 'path',
                 required: true,
                 schema: { type: 'string' }
@@ -193,23 +273,223 @@ describe('generator', () => {
         }
       }
     });
-    const config = createBaseConfig(tmp);
+    const config = createTsConfig(tmp);
     config.input = writeDoc(tmp, 'path-query.json', doc);
     config.groupByTags = false;
 
     await runGenerator(config);
 
     const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
-    expect(apiContent).toContain('url: `/users/${params.id}`');
     expect(apiContent).toContain(
-      'params: { "verbose": params.verbose, "x-request-id": params["x-request-id"] }'
+      'getUserGet = (user_id: string, params?: GetUserGetParams, config?: any)'
     );
-    expect(apiContent).toContain('"x-request-id"?: string');
-    expect(apiContent).not.toContain('params: { "id": params.id');
+    expect(apiContent).toContain('url: `/users/${user_id}`');
+    expect(apiContent).toContain('@param user_id 路径参数');
+    expect(apiContent).toContain('\n    params,\n');
+    expect(apiContent).not.toContain('"verbose": params.verbose');
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+    expect(typesContent).toContain('export interface GetUserGetParams');
+    expect(typesContent).toContain('"x-request-id"?: string;');
+  });
+
+  test('generates valid parameter order and optional request body', async () => {
+    const tmp = createCleanProjectTemp('gen-parameter-order');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/required-body': {
+          post: {
+            operationId: 'createRequired',
+            parameters: [
+              {
+                name: 'verbose',
+                in: 'query',
+                required: false,
+                schema: { type: 'boolean' }
+              }
+            ],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/Payload' }
+                }
+              }
+            },
+            responses: { 204: { description: 'No Content' } }
+          }
+        },
+        '/optional-body': {
+          post: {
+            operationId: 'createOptional',
+            requestBody: {
+              required: false,
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/Payload' }
+                }
+              }
+            },
+            responses: { 204: { description: 'No Content' } }
+          }
+        }
+      },
+      schemas: {
+        Payload: {
+          type: 'object',
+          properties: { name: { type: 'string' } }
+        }
+      }
+    });
+    const config = createTsConfig(tmp);
+    config.input = writeDoc(tmp, 'parameter-order.json', doc);
+    config.groupByTags = false;
+
+    await runGenerator(config);
+
+    const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
+    expect(apiContent).toContain(
+      'createRequiredPost = (params: CreateRequiredPostParams, data: Payload, config?: any)'
+    );
+    expect(apiContent).toContain(
+      'createOptionalPost = (data?: Payload, config?: any)'
+    );
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+    expect(typesContent).toContain('export interface CreateRequiredPostParams');
+    expect(typesContent).toContain('verbose?: boolean;');
+  });
+
+  test('generates request and response models for access properties', async () => {
+    const tmp = createCleanProjectTemp('gen-access-models');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/users': {
+          post: {
+            operationId: 'saveUser',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/User' }
+                }
+              }
+            },
+            responses: {
+              200: {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: { $ref: '#/components/schemas/User' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          required: ['id', 'password', 'createdAt'],
+          properties: {
+            id: { type: 'string' },
+            password: { type: 'string', writeOnly: true },
+            createdAt: { type: 'string', readOnly: true }
+          }
+        }
+      }
+    });
+    const config = createTsConfig(tmp);
+    config.input = writeDoc(tmp, 'access-models.json', doc);
+    config.groupByTags = false;
+
+    await runGenerator(config);
+
+    const typesContent = fs.readFileSync(path.join(tmp, 'types.ts'), 'utf-8');
+    const apiContent = fs.readFileSync(path.join(tmp, 'api.ts'), 'utf-8');
+    expect(typesContent).toContain('export interface UserInput');
+    expect(typesContent).toContain('export interface UserOutput');
+    expect(apiContent).toContain('data: UserInput');
+    expect(apiContent).toContain('return request<UserOutput>');
+    expect(apiContent).toContain('import type { UserInput, UserOutput }');
+  });
+
+  test('rejects tags that escape the output directory', async () => {
+    const tmp = createCleanProjectTemp('gen-tag-escape');
+    const output = path.join(tmp, 'api');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/unsafe': {
+          get: {
+            tags: ['..'],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const config = createTsConfig(output);
+    config.input = writeDoc(tmp, 'unsafe-tag.json', doc);
+    fs.mkdirSync(output, { recursive: true });
+    const sentinelFile = path.join(output, 'keep.txt');
+    fs.writeFileSync(sentinelFile, 'keep', 'utf-8');
+
+    await expect(runGenerator(config)).rejects.toThrow('无效的标签名称');
+    expect(fs.existsSync(path.join(tmp, 'index.ts'))).toBe(false);
+    expect(fs.readFileSync(sentinelFile, 'utf-8')).toBe('keep');
+  });
+
+  test('rejects tags that map to the same output directory', async () => {
+    const tmp = createCleanProjectTemp('gen-tag-collision');
+    const doc = createOpenApiDoc({
+      paths: {
+        '/first': {
+          get: {
+            tags: ['User Admin'],
+            responses: { 200: { description: 'ok' } }
+          }
+        },
+        '/second': {
+          get: {
+            tags: ['User-Admin'],
+            responses: { 200: { description: 'ok' } }
+          }
+        }
+      }
+    });
+    const config = createTsConfig(tmp);
+    config.input = writeDoc(tmp, 'colliding-tags.json', doc);
+
+    await expect(runGenerator(config)).rejects.toThrow('标签目录名称冲突');
+  });
+
+  test('rejects the current working directory as output', async () => {
+    const tmp = createCleanProjectTemp('gen-unsafe-output');
+    const originalDirectory = process.cwd();
+
+    process.chdir(tmp);
+    try {
+      const generator = new CodeGenerator({
+        input: './openapi.json',
+        output: '.',
+        generator: 'typescript',
+        groupByTags: false,
+        overwrite: false,
+        options: {
+          generateModels: false,
+          generateApis: false,
+          generateIndex: false
+        }
+      });
+
+      await expect(generator.generateAll([], [], new Map())).rejects.toThrow(
+        '输出目录不能是当前工作目录或其父目录'
+      );
+    } finally {
+      process.chdir(originalDirectory);
+    }
   });
 
   test('generates deprecated comments from operation metadata', async () => {
-    const tmp = mkProjectTemp('gen-deprecated');
+    const tmp = createCleanProjectTemp('gen-deprecated');
     const doc = createOpenApiDoc({
       paths: {
         '/legacy': {
@@ -223,7 +503,7 @@ describe('generator', () => {
         }
       }
     });
-    const config = createBaseConfig(tmp);
+    const config = createTsConfig(tmp);
     config.input = writeDoc(tmp, 'deprecated.json', doc);
 
     await runGenerator(config);
@@ -236,7 +516,7 @@ describe('generator', () => {
   });
 
   test('generates valid types for invalid schema property names', async () => {
-    const tmp = mkProjectTemp('gen-invalid-props');
+    const tmp = createCleanProjectTemp('gen-invalid-props');
     const doc = createOpenApiDoc({
       schemas: {
         WeirdDto: {
@@ -248,7 +528,7 @@ describe('generator', () => {
         }
       }
     });
-    const config = createBaseConfig(tmp);
+    const config = createTsConfig(tmp);
     config.input = writeDoc(tmp, 'invalid-props.json', doc);
 
     await runGenerator(config);
@@ -259,8 +539,8 @@ describe('generator', () => {
   });
 
   test('uses kebab-case folder names when tagGrouping.fileNaming is kebab-case', async () => {
-    const tmp = mkProjectTemp('gen-kebab');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-kebab');
+    const config = createTsConfig(tmp);
     config.tagGrouping = { fileNaming: 'kebab-case' };
 
     await runGenerator(config);
@@ -270,8 +550,8 @@ describe('generator', () => {
   });
 
   test('uses lowercase tag folder names when tagGrouping.fileNaming is tag', async () => {
-    const tmp = mkProjectTemp('gen-tag-naming');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-tag-naming');
+    const config = createTsConfig(tmp);
     config.tagGrouping = { fileNaming: 'tag' };
 
     await runGenerator(config);
@@ -280,8 +560,8 @@ describe('generator', () => {
   });
 
   test('does not overwrite existing files when overwrite is false', async () => {
-    const tmp = mkProjectTemp('gen-no-overwrite');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-no-overwrite');
+    const config = createTsConfig(tmp);
     config.overwrite = false;
 
     const existingTypesFile = path.join(tmp, 'types.ts');
@@ -305,8 +585,8 @@ describe('generator', () => {
   });
 
   test('does not generate types.ts when generateModels is false', async () => {
-    const tmp = mkProjectTemp('gen-no-models');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-no-models');
+    const config = createTsConfig(tmp);
     config.options!.generateModels = false;
 
     await runGenerator(config);
@@ -324,12 +604,20 @@ describe('generator', () => {
       path.join(tmp, 'userController', 'index.ts'),
       'utf-8'
     );
-    expect(userContent).toMatch(/params: \{ id: string \}/);
+    expect(userContent).toContain(
+      'adminSystemUserIdGet = (id: string, config?: any)'
+    );
+    expect(userContent).toContain(
+      'params: { page?: number, pageSize: number, keyword?: string }'
+    );
+    expect(fs.existsSync(path.join(tmp, 'userController', 'types'))).toBe(
+      false
+    );
   });
 
   test('does not generate API files when generateApis is false', async () => {
-    const tmp = mkProjectTemp('gen-no-apis');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-no-apis');
+    const config = createTsConfig(tmp);
     config.options!.generateApis = false;
 
     await runGenerator(config);
@@ -344,8 +632,8 @@ describe('generator', () => {
   });
 
   test('does not generate index file when generateIndex is false', async () => {
-    const tmp = mkProjectTemp('gen-no-index');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-no-index');
+    const config = createTsConfig(tmp);
     config.options!.generateIndex = false;
 
     await runGenerator(config);
@@ -354,8 +642,8 @@ describe('generator', () => {
   });
 
   test('does not generate comments when addComments is false', async () => {
-    const tmp = mkProjectTemp('gen-no-comments');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-no-comments');
+    const config = createTsConfig(tmp);
     config.options!.addComments = false;
 
     await runGenerator(config);
@@ -367,8 +655,8 @@ describe('generator', () => {
   });
 
   test('ungrouped single file imports types from ./types', async () => {
-    const tmp = mkProjectTemp('gen-single-import');
-    const config = createBaseConfig(tmp);
+    const tmp = createCleanProjectTemp('gen-single-import');
+    const config = createTsConfig(tmp);
     config.groupByTags = false;
 
     await runGenerator(config);

@@ -29,8 +29,8 @@ export class Swagger2API {
       logger.banner('🚀 swagger2api-v3', '开始生成 API 接口文件');
       logger.setTotalSteps(4);
 
-      // 1. 加载Swagger文档
-      logger.stepTitle('📖', '加载 Swagger 文档');
+      // 1. 加载 OpenAPI 文档
+      logger.stepTitle('📖', '加载 OpenAPI 文档');
       const document = await loadSwaggerDocument(this.config.input);
       logger.success(
         `文档加载成功: ${document.info.title} v${document.info.version}`
@@ -165,4 +165,5 @@ export async function generate(config: SwaggerConfig): Promise<void> {
 export * from './types';
 export { SwaggerParser } from './core/parser';
 export { CodeGenerator } from './core/generator';
+export { OpenAPITypeGenerator } from './core/type-generator';
 export * from './utils';

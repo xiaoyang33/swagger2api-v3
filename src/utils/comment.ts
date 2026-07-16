@@ -15,7 +15,10 @@ export interface ApiCommentOperation {
 /**
  * 注释生成需要的参数信息
  */
-export type ApiCommentParameter = Pick<ParameterInfo, 'in' | 'description'>;
+export type ApiCommentParameter = Pick<ParameterInfo, 'in' | 'description'> & {
+  /** 生成后的函数参数名 */
+  name?: string;
+};
 
 /**
  * 生成接口注释
@@ -47,8 +50,13 @@ export function generateApiComment(
     if (hasParams || hasData) {
       comments.push(' *');
 
-      if (hasParams) {
-        const paramDescriptions = [...pathParams, ...queryParams]
+      pathParams.forEach((param, index) => {
+        const name = param.name || `pathParam${index + 1}`;
+        comments.push(` * @param ${name} ${param.description || '路径参数'}`);
+      });
+
+      if (queryParams.length > 0) {
+        const paramDescriptions = queryParams
           .map((param) => param.description || '')
           .filter((description) => description)
           .join(', ');

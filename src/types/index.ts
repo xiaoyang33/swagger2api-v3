@@ -8,7 +8,7 @@
 export interface SwaggerConfig {
   /** 本地 JSON Schema 路径，用于编辑器提示 */
   $schema?: string;
-  /** Swagger JSON 文件路径或 URL */
+  /** OpenAPI 3.0 JSON/YAML 文件路径或 URL */
   input: string;
   /** 输出目录 */
   output: string;
@@ -119,6 +119,14 @@ export interface SwaggerDocument {
 }
 
 /**
+ * OpenAPI 引用对象
+ */
+export interface SwaggerReference {
+  /** 引用地址 */
+  $ref: string;
+}
+
+/**
  * OpenAPI Server 对象
  */
 export interface OpenAPIServer {
@@ -176,6 +184,8 @@ export interface SwaggerPaths {
  * Swagger路径项
  */
 export interface SwaggerPathItem {
+  /** Path Item 引用 */
+  $ref?: string;
   get?: SwaggerOperation;
   post?: SwaggerOperation;
   put?: SwaggerOperation;
@@ -183,6 +193,7 @@ export interface SwaggerPathItem {
   patch?: SwaggerOperation;
   head?: SwaggerOperation;
   options?: SwaggerOperation;
+  trace?: SwaggerOperation;
   parameters?: SwaggerParameter[];
 }
 
@@ -207,7 +218,7 @@ export interface SwaggerRequestBody {
   /** 本地引用路径 */
   $ref?: string;
   description?: string;
-  content: {
+  content?: {
     [mediaType: string]: {
       schema?: SwaggerSchema;
       example?: any;
@@ -239,14 +250,16 @@ export interface SwaggerParameter {
  * OpenAPI 响应
  */
 export interface SwaggerResponses {
-  [statusCode: string]: SwaggerResponse;
+  [statusCode: string]: SwaggerResponse | SwaggerReference;
 }
 
 /**
  * OpenAPI 响应项
  */
 export interface SwaggerResponse {
-  description: string;
+  /** 本地或已打包的引用路径 */
+  $ref?: string;
+  description?: string;
   content?: {
     [mediaType: string]: {
       schema?: SwaggerSchema;
@@ -291,7 +304,7 @@ export interface SwaggerSchema {
   $ref?: string;
   example?: any;
   examples?: any[];
-  discriminator?: string;
+  discriminator?: OpenAPIDiscriminator;
   readOnly?: boolean;
   writeOnly?: boolean;
   xml?: SwaggerXml;
@@ -302,6 +315,16 @@ export interface SwaggerSchema {
   'x-enum-varnames'?: string[];
   /** OpenAPI 扩展字段：枚举名称 */
   'x-enumNames'?: string[];
+}
+
+/**
+ * OpenAPI discriminator 对象
+ */
+export interface OpenAPIDiscriminator {
+  /** 用作类型判别的属性名 */
+  propertyName: string;
+  /** 判别值到 Schema 引用的映射 */
+  mapping?: Record<string, string>;
 }
 
 /**
@@ -321,7 +344,7 @@ export interface SwaggerItems {
  */
 export interface SwaggerComponents {
   schemas?: { [name: string]: SwaggerSchema };
-  responses?: { [name: string]: SwaggerResponse };
+  responses?: { [name: string]: SwaggerResponse | SwaggerReference };
   parameters?: { [name: string]: SwaggerParameter };
   examples?: { [name: string]: any };
   requestBodies?: { [name: string]: any };

@@ -3,6 +3,13 @@ import { SwaggerConfig } from '../src/types';
 import { removeMethodSuffix } from '../src/utils';
 
 describe('addMethodSuffix configuration', () => {
+  const baseConfig: SwaggerConfig = {
+    input: '',
+    output: './temp',
+    generator: 'typescript',
+    groupByTags: false
+  };
+
   const baseDoc = {
     openapi: '3.0.0',
     info: { title: 'Test API', version: '1.0' },
@@ -76,10 +83,7 @@ describe('addMethodSuffix configuration', () => {
 
   test('should add method suffix when addMethodSuffix is true', () => {
     const config: SwaggerConfig = {
-      input: '',
-      output: './temp',
-      generator: 'typescript',
-      groupByTags: false,
+      ...baseConfig,
       addMethodSuffix: true
     };
 
@@ -103,10 +107,7 @@ describe('addMethodSuffix configuration', () => {
 
   test('should not add method suffix when addMethodSuffix is false', () => {
     const config: SwaggerConfig = {
-      input: '',
-      output: './temp',
-      generator: 'typescript',
-      groupByTags: false,
+      ...baseConfig,
       addMethodSuffix: false
     };
 
@@ -129,15 +130,7 @@ describe('addMethodSuffix configuration', () => {
   });
 
   test('should default to true when addMethodSuffix is not specified', () => {
-    const config: SwaggerConfig = {
-      input: '',
-      output: './temp',
-      generator: 'typescript',
-      groupByTags: false
-      // addMethodSuffix not specified
-    };
-
-    const parser = new SwaggerParser(baseDoc as any, config);
+    const parser = new SwaggerParser(baseDoc as any, baseConfig);
     const apis = parser.parseApis();
 
     const getUsersApi = apis.find(
@@ -162,10 +155,7 @@ describe('addMethodSuffix configuration', () => {
 
   test('should work with methodNameIgnorePrefix', () => {
     const config: SwaggerConfig = {
-      input: '',
-      output: './temp',
-      generator: 'typescript',
-      groupByTags: false,
+      ...baseConfig,
       addMethodSuffix: false,
       methodNameIgnorePrefix: ['get', 'create']
     };

@@ -2,6 +2,9 @@ import {
   SwaggerDocument,
   SwaggerOperation,
   SwaggerParameter,
+  SwaggerPathItem,
+  SwaggerResponse,
+  SwaggerResponses,
   SwaggerSchema,
   ApiInfo,
   TypeInfo,
@@ -10,17 +13,14 @@ import {
 import {
   pathToFunctionName,
   swaggerTypeToTsType,
-  stripNullFromUnion,
   getResponseType,
   getSchemaFromContent,
   swaggerParameterToSchema,
-  toPascalCase,
   stripMethodNamePrefixes,
-  sanitizeTypeName,
   removeMethodSuffix,
-  formatTsPropertyName,
   logger
 } from '../utils';
+import { OpenAPITypeGenerator } from './type-generator';
 
 const HTTP_METHODS = [
   'get',
@@ -29,18 +29,24 @@ const HTTP_METHODS = [
   'delete',
   'patch',
   'head',
-  'options'
+  'options',
+  'trace'
 ] as const;
 
 const MAX_REF_RESOLVE_DEPTH = 20;
 
 /**
- * Swagger文档解析器
+ * OpenAPI 3.0 文档解析器
  */
 export class SwaggerParser {
   private document: SwaggerDocument;
   private config: SwaggerConfig;
 
+  /**
+   * 创建 OpenAPI 文档解析器
+   * @param document OpenAPI 文档
+   * @param config 生成配置
+   */
   constructor(document: SwaggerDocument, config: SwaggerConfig) {
     this.document = document;
     this.config = config;
@@ -62,7 +68,8 @@ export class SwaggerParser {
     const apis: ApiInfo[] = [];
     const paths = this.document.paths;
 
-    for (const [path, pathItem] of Object.entries(paths)) {
+    for (const [path, rawPathItem] of Object.entries(paths)) {
+      const pathItem = this.resolveReference<SwaggerPathItem>(rawPathItem);
       for (const method of HTTP_METHODS) {
         const operation = pathItem[
           method as keyof typeof pathItem
@@ -148,22 +155,21 @@ export class SwaggerParser {
     );
 
     // 获取响应类型
-    const responseType = getResponseType(
-      operation.responses,
-      this.getAllSchemas()
-    );
+    const responses = this.resolveResponses(operation.responses);
+    const responseType = getResponseType(responses, this.getAllSchemas());
 
     // 获取请求体类型
     const bodyParam = allParameters.find((p) => p.in === 'body');
     const requestBodyType = bodyParam?.schema
-      ? swaggerTypeToTsType(bodyParam.schema, this.getAllSchemas())
+      ? swaggerTypeToTsType(bodyParam.schema, this.getAllSchemas(), 'request')
       : undefined;
 
     // 解析参数信息
     const parameters = allParameters.map((param) => {
       const type = swaggerTypeToTsType(
         swaggerParameterToSchema(param),
-        this.getAllSchemas()
+        this.getAllSchemas(),
+        'request'
       );
       return {
         name: param.name,
@@ -193,8 +199,6 @@ export class SwaggerParser {
    * @returns 类型信息数组
    */
   parseTypes(): TypeInfo[] {
-    const types: TypeInfo[] = [];
-
     // Debug log
     logger.debug('解析类型定义...');
     logger.debugKV('components', !!this.document.components);
@@ -208,105 +212,14 @@ export class SwaggerParser {
       }
     }
 
-    // 解析 OpenAPI 3.x components.schemas
-    if (this.document.components?.schemas) {
-      for (const [name, schema] of Object.entries(
-        this.document.components.schemas
-      )) {
-        const sanitizedName = sanitizeTypeName(name); // Use it
-        const typeInfo = this.parseTypeDefinition(sanitizedName, schema);
-        types.push(typeInfo);
-      }
-    }
-
-    return types;
-  }
-
-  /**
-   * 解析单个类型定义
-   * @param name 类型名称
-   * @param schema 模式对象
-   * @returns 类型信息
-   */
-  private parseTypeDefinition(name: string, schema: SwaggerSchema): TypeInfo {
-    const typeName = toPascalCase(name);
-    let definition: string;
-
-    // 获取所有 schemas 用于类型解析
-    const allSchemas = this.getAllSchemas();
-
-    if (schema.type === 'object' && schema.properties) {
-      // 对象类型
-      const properties = Object.entries(schema.properties)
-        .map(([key, value]) => {
-          const optional = schema.required?.includes(key) ? '' : '?';
-          let type = swaggerTypeToTsType(value, allSchemas);
-          if (optional === '?') type = stripNullFromUnion(type);
-          const comment = value.description
-            ? ` /** ${value.description} */`
-            : '';
-          return `${comment}\n  ${formatTsPropertyName(key)}${optional}: ${type};`;
-        })
-        .join('\n');
-
-      definition = `export interface ${typeName} {\n${properties}\n}`;
-    } else if (schema.type === 'array') {
-      // 数组类型 - 生成指向 items 类型的别名(不带 [])
-      // 在引用时会自动添加 []
-      const itemType = swaggerTypeToTsType(schema.items || {}, allSchemas);
-      definition = `export type ${typeName} = ${itemType};`;
-    } else if (schema.enum) {
-      // 枚举类型
-      const enumValues = schema.enum
-        .map((value: any, index: number) => {
-          const key = this.getEnumMemberName(schema, value, index);
-
-          return `  ${key} = ${JSON.stringify(String(value))}`;
-        })
-        .join(',\n');
-      definition = `export enum ${typeName} {\n${enumValues}\n}`;
-    } else {
-      // 其他类型
-      const type = swaggerTypeToTsType(schema);
-      definition = `export type ${typeName} = ${type};`;
-    }
-
-    return {
-      name: typeName,
-      definition,
-      description: schema.description
-    };
-  }
-
-  /**
-   * 获取枚举成员名称
-   * @param schema 枚举 schema
-   * @param value 枚举值
-   * @param index 枚举值索引
-   * @returns 枚举成员名称
-   */
-  private getEnumMemberName(
-    schema: SwaggerSchema,
-    value: any,
-    index: number
-  ): string {
-    const extensionName =
-      schema['x-enum-varnames']?.[index] || schema['x-enumNames']?.[index];
-    if (extensionName) {
-      return extensionName;
-    }
-
-    const strValue = String(value);
-    if (/^\d+$/.test(strValue)) {
-      return `VALUE_${strValue}`;
-    }
-
-    return strValue.toUpperCase();
+    return new OpenAPITypeGenerator(this.getAllSchemas()).generate();
   }
 
   /**
    * 解析本地 $ref 引用对象
    * @param value 可能带有 $ref 的对象
+   * @param seenRefs 已访问的引用
+   * @param depth 当前解析深度
    * @returns 引用解析后的对象
    */
   private resolveReference<T>(
@@ -320,7 +233,7 @@ export class SwaggerParser {
 
     const ref = (value as any).$ref;
     if (!ref.startsWith('#/')) {
-      throw new Error(`暂不支持外部 $ref 引用: ${ref}`);
+      throw new Error(`外部 $ref 需要先通过 loadSwaggerDocument 打包: ${ref}`);
     }
 
     if (depth >= MAX_REF_RESOLVE_DEPTH) {
@@ -349,6 +262,20 @@ export class SwaggerParser {
     }
 
     return this.resolveReference(current as T, seenRefs, depth + 1);
+  }
+
+  /**
+   * 解析响应对象中的本地引用
+   * @param responses OpenAPI 响应集合
+   * @returns 已解析的响应集合
+   */
+  private resolveResponses(responses: SwaggerResponses): SwaggerResponses {
+    return Object.fromEntries(
+      Object.entries(responses).map(([status, response]) => [
+        status,
+        this.resolveReference<SwaggerResponse>(response as SwaggerResponse)
+      ])
+    );
   }
 
   /**
@@ -403,7 +330,8 @@ export class SwaggerParser {
     }
 
     // 从路径操作中获取
-    for (const pathItem of Object.values(this.document.paths)) {
+    for (const rawPathItem of Object.values(this.document.paths)) {
+      const pathItem = this.resolveReference<SwaggerPathItem>(rawPathItem);
       for (const method of HTTP_METHODS) {
         const operation = pathItem[
           method as keyof typeof pathItem

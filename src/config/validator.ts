@@ -1,4 +1,6 @@
+import * as path from 'path';
 import { SwaggerConfig } from '../types';
+import { isPathInside } from '../utils/file';
 
 const CONFIG_KEYS = [
   '$schema',
@@ -44,8 +46,13 @@ const COMMENT_KEYS = [
 export function validateSwaggerConfig(config: SwaggerConfig): string[] {
   const errors: string[] = [];
 
+  if (!isPlainObject(config)) {
+    return ['config 必须是对象'];
+  }
+
   validateRequiredString(config.input, 'input', errors);
   validateRequiredString(config.output, 'output', errors);
+  validateOutputPath(config.output, errors);
   validateEnum(
     config.generator,
     'generator',
@@ -97,8 +104,27 @@ function validateRequiredString(
   field: string,
   errors: string[]
 ): void {
-  if (typeof value !== 'string' || !value) {
+  if (typeof value !== 'string' || !value.trim()) {
     errors.push(`${field} 配置项不能为空，且必须是字符串`);
+  }
+}
+
+/**
+ * 验证输出路径不会覆盖当前工作目录或其父目录
+ * @param value 输出路径
+ * @param errors 错误信息数组
+ */
+function validateOutputPath(value: unknown, errors: string[]): void {
+  if (typeof value !== 'string' || !value.trim()) return;
+
+  const currentDirectory = path.resolve(process.cwd());
+  const outputDirectory = path.resolve(currentDirectory, value);
+
+  if (
+    outputDirectory === currentDirectory ||
+    isPathInside(outputDirectory, currentDirectory)
+  ) {
+    errors.push('output 不能是当前工作目录或其父目录');
   }
 }
 
@@ -210,21 +236,41 @@ function validateStringArray(
  * @param errors 错误信息数组
  */
 function validateFilter(config: SwaggerConfig, errors: string[]): void {
-  if (!config.filter) return;
+  if (!validateOptionalPlainObject(config.filter, 'filter', errors)) return;
 
   validateKnownKeys(config.filter, ['include', 'exclude'], 'filter', errors);
-  validateKnownKeys(config.filter.include, ['tags'], 'filter.include', errors);
-  validateKnownKeys(config.filter.exclude, ['tags'], 'filter.exclude', errors);
-  validateStringArray(
-    config.filter.include?.tags,
-    'filter.include.tags',
-    errors
-  );
-  validateStringArray(
-    config.filter.exclude?.tags,
-    'filter.exclude.tags',
-    errors
-  );
+
+  if (
+    validateOptionalPlainObject(config.filter.include, 'filter.include', errors)
+  ) {
+    validateKnownKeys(
+      config.filter.include,
+      ['tags'],
+      'filter.include',
+      errors
+    );
+    validateStringArray(
+      config.filter.include.tags,
+      'filter.include.tags',
+      errors
+    );
+  }
+
+  if (
+    validateOptionalPlainObject(config.filter.exclude, 'filter.exclude', errors)
+  ) {
+    validateKnownKeys(
+      config.filter.exclude,
+      ['tags'],
+      'filter.exclude',
+      errors
+    );
+    validateStringArray(
+      config.filter.exclude.tags,
+      'filter.exclude.tags',
+      errors
+    );
+  }
 }
 
 /**
@@ -233,7 +279,7 @@ function validateFilter(config: SwaggerConfig, errors: string[]): void {
  * @param errors 错误信息数组
  */
 function validateOptions(config: SwaggerConfig, errors: string[]): void {
-  if (!config.options) return;
+  if (!validateOptionalPlainObject(config.options, 'options', errors)) return;
 
   validateKnownKeys(config.options, OPTIONS_KEYS, 'options', errors);
   validateOptionalBoolean(
@@ -266,7 +312,9 @@ function validateOptions(config: SwaggerConfig, errors: string[]): void {
  * @param errors 错误信息数组
  */
 function validateTagGrouping(config: SwaggerConfig, errors: string[]): void {
-  if (!config.tagGrouping) return;
+  if (!validateOptionalPlainObject(config.tagGrouping, 'tagGrouping', errors)) {
+    return;
+  }
 
   validateKnownKeys(
     config.tagGrouping,
@@ -298,7 +346,7 @@ function validateTagGrouping(config: SwaggerConfig, errors: string[]): void {
  * @param errors 错误信息数组
  */
 function validateComments(config: SwaggerConfig, errors: string[]): void {
-  if (!config.comments) return;
+  if (!validateOptionalPlainObject(config.comments, 'comments', errors)) return;
 
   validateKnownKeys(config.comments, COMMENT_KEYS, 'comments', errors);
   validateOptionalBoolean(
@@ -343,4 +391,35 @@ function validateKnownKeys(
       errors.push(`${path}.${key} 不是支持的配置项`);
     }
   }
+}
+
+/**
+ * 验证可选配置值是否为普通对象
+ * @param value 配置值
+ * @param field 字段路径
+ * @param errors 错误信息数组
+ * @returns 配置值是否为普通对象
+ */
+function validateOptionalPlainObject(
+  value: unknown,
+  field: string,
+  errors: string[]
+): value is Record<string, unknown> {
+  if (value === undefined) return false;
+
+  if (!isPlainObject(value)) {
+    errors.push(`${field} 必须是对象`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * 判断值是否为普通对象
+ * @param value 待判断的值
+ * @returns 是否为普通对象
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }

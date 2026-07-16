@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
+import OpenAPIParser = require('@apidevtools/swagger-parser');
 import { SwaggerDocument } from '../types';
 import { logger } from './logger';
 
@@ -25,32 +25,71 @@ export function removeDirectory(dirPath: string): void {
 }
 
 /**
- * 读取Swagger文档
- * @param input 文件路径或URL
- * @returns Swagger文档对象
+ * 判断目标路径是否严格位于父路径内部
+ * @param parentPath 父路径
+ * @param targetPath 目标路径
+ * @returns 目标路径是否位于父路径内部
+ */
+export function isPathInside(parentPath: string, targetPath: string): boolean {
+  const relativePath = path.relative(
+    path.resolve(parentPath),
+    path.resolve(targetPath)
+  );
+
+  return (
+    relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
+/**
+ * 读取并打包 OpenAPI 3.0 文档
+ * @param input 文件路径或 URL
+ * @returns OpenAPI 文档对象
  */
 export async function loadSwaggerDocument(
   input: string
 ): Promise<SwaggerDocument> {
   try {
-    if (input.startsWith('http://') || input.startsWith('https://')) {
-      const { data } = await axios.get(input);
+    const isRemoteInput = /^https?:\/\//i.test(input);
+    const resolveOptions = isRemoteInput
+      ? {
+          file: false,
+          http: {
+            timeout: 15000,
+            safeUrlResolver: false
+          }
+        }
+      : {
+          http: {
+            timeout: 15000,
+            safeUrlResolver: false
+          }
+        };
+    const data = (await OpenAPIParser.bundle(input, {
+      resolve: resolveOptions
+    })) as SwaggerDocument;
+
+    if (isRemoteInput) {
       logger.debug(`从 URL 加载: ${input}`);
-      if (data.components?.schemas) {
-        logger.debugKV(
-          'schemas 数量',
-          Object.keys(data.components.schemas).length
-        );
-      } else {
-        logger.debug('加载的数据中未发现 schemas');
-      }
-      return data;
+    } else {
+      logger.debug(`从文件加载: ${path.resolve(input)}`);
     }
 
-    const content = fs.readFileSync(input, 'utf-8');
-    return JSON.parse(content);
+    if (data.components?.schemas) {
+      logger.debugKV(
+        'schemas 数量',
+        Object.keys(data.components.schemas).length
+      );
+    } else {
+      logger.debug('加载的数据中未发现 schemas');
+    }
+
+    return data;
   } catch (error) {
-    throw new Error(`Failed to load Swagger document from ${input}: ${error}`);
+    throw new Error(`Failed to load OpenAPI document from ${input}: ${error}`);
   }
 }
 

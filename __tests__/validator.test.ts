@@ -18,15 +18,48 @@ describe('validateSwaggerConfig', () => {
   });
 
   test('缺少必填字段 input 时报错', () => {
-    const config = { output: './src/api', generator: 'typescript' as const, groupByTags: true };
+    const config = {
+      output: './src/api',
+      generator: 'typescript' as const,
+      groupByTags: true
+    };
     const errors = validateSwaggerConfig(config as any);
     expect(errors.some((e) => e.includes('input'))).toBe(true);
   });
 
   test('缺少必填字段 output 时报错', () => {
-    const config = { input: './api.json', generator: 'typescript' as const, groupByTags: true };
+    const config = {
+      input: './api.json',
+      generator: 'typescript' as const,
+      groupByTags: true
+    };
     const errors = validateSwaggerConfig(config as any);
     expect(errors.some((e) => e.includes('output'))).toBe(true);
+  });
+
+  test('output 为当前目录或父目录时报错', () => {
+    const currentErrors = validateSwaggerConfig({
+      ...validConfig(),
+      output: '.'
+    });
+    const parentErrors = validateSwaggerConfig({
+      ...validConfig(),
+      output: '..'
+    });
+
+    expect(currentErrors).toContain('output 不能是当前工作目录或其父目录');
+    expect(parentErrors).toContain('output 不能是当前工作目录或其父目录');
+  });
+
+  test('空白必填字符串时报错', () => {
+    const errors = validateSwaggerConfig({
+      ...validConfig(),
+      input: '   ',
+      output: '   '
+    });
+
+    expect(errors.some((error) => error.includes('input'))).toBe(true);
+    expect(errors.some((error) => error.includes('output'))).toBe(true);
   });
 
   test('generator 为非法值时报错', () => {
@@ -48,8 +81,14 @@ describe('validateSwaggerConfig', () => {
   });
 
   test('requestStyle 为合法值时不报错', () => {
-    const errors1 = validateSwaggerConfig({ ...validConfig(), requestStyle: 'method' });
-    const errors2 = validateSwaggerConfig({ ...validConfig(), requestStyle: 'generic' });
+    const errors1 = validateSwaggerConfig({
+      ...validConfig(),
+      requestStyle: 'method'
+    });
+    const errors2 = validateSwaggerConfig({
+      ...validConfig(),
+      requestStyle: 'generic'
+    });
     expect(errors1.every((e) => !e.includes('requestStyle'))).toBe(true);
     expect(errors2.every((e) => !e.includes('requestStyle'))).toBe(true);
   });
@@ -61,8 +100,14 @@ describe('validateSwaggerConfig', () => {
   });
 
   test('multiTagStrategy 为合法值时不报错', () => {
-    const errors1 = validateSwaggerConfig({ ...validConfig(), multiTagStrategy: 'first' });
-    const errors2 = validateSwaggerConfig({ ...validConfig(), multiTagStrategy: 'all' });
+    const errors1 = validateSwaggerConfig({
+      ...validConfig(),
+      multiTagStrategy: 'first'
+    });
+    const errors2 = validateSwaggerConfig({
+      ...validConfig(),
+      multiTagStrategy: 'all'
+    });
     expect(errors1.every((e) => !e.includes('multiTagStrategy'))).toBe(true);
     expect(errors2.every((e) => !e.includes('multiTagStrategy'))).toBe(true);
   });
@@ -92,21 +137,65 @@ describe('validateSwaggerConfig', () => {
   });
 
   test('options 字段类型错误时报错', () => {
-    const config = { ...validConfig(), options: { generateModels: 'yes' as any } };
+    const config = {
+      ...validConfig(),
+      options: { generateModels: 'yes' as any }
+    };
     const errors = validateSwaggerConfig(config);
     expect(errors.some((e) => e.includes('options.generateModels'))).toBe(true);
   });
 
   test('tagGrouping 字段类型错误时报错', () => {
-    const config = { ...validConfig(), tagGrouping: { fileNaming: 'invalid' as any } };
+    const config = {
+      ...validConfig(),
+      tagGrouping: { fileNaming: 'invalid' as any }
+    };
     const errors = validateSwaggerConfig(config);
     expect(errors.some((e) => e.includes('tagGrouping.fileNaming'))).toBe(true);
   });
 
   test('comments 字段类型错误时报错', () => {
-    const config = { ...validConfig(), comments: { includeDescription: 'yes' as any } };
+    const config = {
+      ...validConfig(),
+      comments: { includeDescription: 'yes' as any }
+    };
     const errors = validateSwaggerConfig(config);
-    expect(errors.some((e) => e.includes('comments.includeDescription'))).toBe(true);
+    expect(errors.some((e) => e.includes('comments.includeDescription'))).toBe(
+      true
+    );
+  });
+
+  test.each([
+    ['filter', 'invalid'],
+    ['options', 'invalid'],
+    ['tagGrouping', []],
+    ['comments', 42]
+  ])('%s 不是对象时报错', (field, value) => {
+    const errors = validateSwaggerConfig({
+      ...validConfig(),
+      [field]: value
+    } as SwaggerConfig);
+
+    expect(errors).toContain(`${field} 必须是对象`);
+  });
+
+  test('filter 的 include 和 exclude 不是对象时报错', () => {
+    const errors = validateSwaggerConfig({
+      ...validConfig(),
+      filter: {
+        include: 'invalid',
+        exclude: []
+      }
+    } as unknown as SwaggerConfig);
+
+    expect(errors).toContain('filter.include 必须是对象');
+    expect(errors).toContain('filter.exclude 必须是对象');
+  });
+
+  test('根配置不是对象时报错', () => {
+    expect(validateSwaggerConfig(null as unknown as SwaggerConfig)).toEqual([
+      'config 必须是对象'
+    ]);
   });
 
   test('未知配置字段时报错', () => {
@@ -135,7 +224,12 @@ describe('validateSwaggerConfig', () => {
       headerComment: '/** custom */',
       filter: { include: { tags: ['User'] }, exclude: { tags: [] } },
       tagGrouping: { enabled: true, fileNaming: 'camelCase' },
-      options: { generateModels: true, generateApis: true, generateIndex: true, addComments: true },
+      options: {
+        generateModels: true,
+        generateApis: true,
+        generateIndex: true,
+        addComments: true
+      },
       comments: { includeDescription: true, includeParameters: true }
     };
     const errors = validateSwaggerConfig(config);

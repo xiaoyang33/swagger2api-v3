@@ -2,7 +2,14 @@ import { SwaggerParser } from '../src/core/parser';
 import { SwaggerConfig } from '../src/types';
 
 describe('Array type reference generation', () => {
-  test('should generate array notation at reference point, not in type definition', () => {
+  const config: SwaggerConfig = {
+    input: '',
+    output: './temp',
+    generator: 'typescript',
+    groupByTags: false
+  };
+
+  test('should generate array notation in the component type definition', () => {
     const doc = {
       openapi: '3.0.0',
       info: { title: 'Test API', version: '1.0' },
@@ -40,13 +47,6 @@ describe('Array type reference generation', () => {
       }
     };
 
-    const config: SwaggerConfig = {
-      input: '',
-      output: './temp',
-      generator: 'typescript',
-      groupByTags: false
-    };
-
     const parser = new SwaggerParser(doc as any, config);
     const types = parser.parseTypes();
 
@@ -62,69 +62,18 @@ describe('Array type reference generation', () => {
       'export interface SystemMenuTreeDto'
     );
 
-    // SystemMenuListRespDto 应该是一个类型别名,指向 SystemMenuTreeDto (不带 [])
-    // 期望: export type SystemMenuListRespDto = SystemMenuTreeDto;
-    // 而不是: export type SystemMenuListRespDto = SystemMenuTreeDto[];
+    // 数组组件自身应保留数组语义
     expect(menuListType?.definition).toContain(
-      'export type SystemMenuListRespDto'
+      'export type SystemMenuListRespDto = SystemMenuTreeDto[];'
     );
-    expect(menuListType?.definition).toContain('SystemMenuTreeDto');
-    expect(menuListType?.definition).not.toMatch(/SystemMenuTreeDto\[\]/);
 
-    // ResponseSystemMenuListRespDto 的 data 字段应该是 SystemMenuListRespDto[]
+    // 引用数组组件时直接使用组件别名
     expect(responseType?.definition).toContain(
       'export interface ResponseSystemMenuListRespDto'
     );
-    expect(responseType?.definition).toContain('data: SystemMenuListRespDto[]');
-  });
-
-  test('should handle nested array references correctly', () => {
-    const doc = {
-      openapi: '3.0.0',
-      info: { title: 'Test API', version: '1.0' },
-      paths: {},
-      components: {
-        schemas: {
-          User: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' }
-            }
-          },
-          UserList: {
-            type: 'array',
-            items: { $ref: '#/components/schemas/User' }
-          },
-          Response: {
-            type: 'object',
-            properties: {
-              users: { $ref: '#/components/schemas/UserList' }
-            }
-          }
-        }
-      }
-    };
-
-    const config: SwaggerConfig = {
-      input: '',
-      output: './temp',
-      generator: 'typescript',
-      groupByTags: false
-    };
-
-    const parser = new SwaggerParser(doc as any, config);
-    const types = parser.parseTypes();
-
-    const userListType = types.find((t) => t.name === 'UserList');
-    const responseType = types.find((t) => t.name === 'Response');
-
-    // UserList 应该是类型别名,不带 []
-    expect(userListType?.definition).toContain('export type UserList = User');
-    expect(userListType?.definition).not.toMatch(/User\[\]/);
-
-    // Response 的 users 字段应该是 UserList[]
-    expect(responseType?.definition).toContain('users');
-    expect(responseType?.definition).toContain('UserList[]');
+    expect(responseType?.definition).toContain('data: SystemMenuListRespDto');
+    expect(responseType?.definition).not.toContain(
+      'data: SystemMenuListRespDto[]'
+    );
   });
 });

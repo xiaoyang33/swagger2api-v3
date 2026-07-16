@@ -127,7 +127,8 @@ export function sanitizeFilename(filename: string): string {
  * @returns 清理后的类型名称
  */
 export function sanitizeTypeName(name: string): string {
-  if (!name) return name;
+  if (!name) return 'AnonymousType';
   const replaced = name.replace(/[^a-zA-Z0-9_]/g, '_');
-  return toPascalCase(replaced);
+  const typeName = toPascalCase(replaced) || 'AnonymousType';
+  return /^\d/.test(typeName) ? `_${typeName}` : typeName;
 }

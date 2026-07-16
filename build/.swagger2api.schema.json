@@ -10,11 +10,11 @@
     },
     "input": {
       "type": "string",
-      "description": "OpenAPI JSON 文件路径或 URL"
+      "description": "OpenAPI 3.0 JSON/YAML 文件路径或 URL"
     },
     "output": {
       "type": "string",
-      "description": "生成代码输出目录"
+      "description": "生成代码输出目录，不能是当前工作目录或其父目录"
     },
     "generator": {
       "enum": ["typescript", "javascript"],

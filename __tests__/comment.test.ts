@@ -33,12 +33,12 @@ describe('generateApiComment', () => {
     expect(result).toContain('@param params 页码');
   });
 
-  test('有 path 参数时生成 @param params', () => {
+  test('有 path 参数时生成独立参数注释', () => {
     const params: ApiCommentParameter[] = [
-      { in: 'path', description: '用户ID' }
+      { name: 'id', in: 'path', description: '用户ID' }
     ];
     const result = generateApiComment({ summary: '获取详情' }, params);
-    expect(result).toContain('@param params 用户ID');
+    expect(result).toContain('@param id 用户ID');
   });
 
   test('有 body 参数时生成 @param data', () => {
@@ -51,12 +51,13 @@ describe('generateApiComment', () => {
 
   test('混合参数（query + path + body）同时输出', () => {
     const params: ApiCommentParameter[] = [
-      { in: 'path', description: '用户ID' },
+      { name: 'id', in: 'path', description: '用户ID' },
       { in: 'query', description: '详细信息' },
       { in: 'body', description: '更新数据' }
     ];
     const result = generateApiComment({ summary: '更新用户' }, params);
-    expect(result).toContain('@param params 用户ID, 详细信息');
+    expect(result).toContain('@param id 用户ID');
+    expect(result).toContain('@param params 详细信息');
     expect(result).toContain('@param data 更新数据');
     expect(result).toContain('@param config');
   });
