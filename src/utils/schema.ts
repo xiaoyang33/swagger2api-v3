@@ -79,7 +79,8 @@ export function isGenericResponseSchema(schema: SwaggerSchema): boolean {
   const hasGenericData =
     isObjectSchema(dataSchema) &&
     !dataSchema.properties &&
-    dataSchema.additionalProperties === undefined;
+    (dataSchema.additionalProperties === undefined ||
+      dataSchema.additionalProperties === true);
 
   return hasCommonField && hasGenericData;
 }

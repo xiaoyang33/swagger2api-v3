@@ -175,7 +175,7 @@ describe('utils', () => {
         type: 'object',
         properties: {
           code: { type: 'integer' },
-          data: { type: 'object' }
+          data: { type: 'object', additionalProperties: true }
         }
       },
       UserListRespDto: { type: 'object', properties: {} }
